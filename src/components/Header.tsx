@@ -28,6 +28,7 @@ interface HeaderProps {
   onOpenLogin: () => void;
   onLogout: () => void;
   onOpenUserManagement?: () => void;
+  onOpenChangePassword?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -40,7 +41,8 @@ export const Header: React.FC<HeaderProps> = ({
   currentUser,
   onOpenLogin,
   onLogout,
-  onOpenUserManagement
+  onOpenUserManagement,
+  onOpenChangePassword
 }) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const isAdmin = currentUser?.role === 'ADMIN';
@@ -222,6 +224,20 @@ export const Header: React.FC<HeaderProps> = ({
                         >
                           <Users className="w-4 h-4 text-blue-600" />
                           <span>Quản trị cán bộ & người dùng</span>
+                        </button>
+                      )}
+
+                      {onOpenChangePassword && (
+                        <button
+                          id="header-btn-change-password"
+                          onClick={() => {
+                            onOpenChangePassword();
+                            setShowUserMenu(false);
+                          }}
+                          className="w-full flex items-center gap-2 p-2 rounded-xl text-slate-700 hover:bg-amber-50 hover:text-amber-800 transition-colors font-medium text-left cursor-pointer"
+                        >
+                          <KeyRound className="w-4 h-4 text-amber-600" />
+                          <span>Đổi mật khẩu cá nhân</span>
                         </button>
                       )}
 

@@ -27,6 +27,7 @@ import { ReportsView } from './components/ReportsView';
 import { AdminSystemHealthView } from './components/AdminSystemHealthView';
 import { UserManagementView } from './components/UserManagementView';
 import { LoginModal } from './components/LoginModal';
+import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { 
   CheckCircle2, 
   AlertTriangle, 
@@ -36,7 +37,8 @@ import {
   Users, 
   ShieldCheck, 
   Crown,
-  ArrowLeft
+  ArrowLeft,
+  ChevronRight
 } from 'lucide-react';
 import { 
   INITIAL_CUSTOMERS, 
@@ -56,12 +58,13 @@ export default function App() {
   });
   const [users, setUsers] = useState<AppUser[]>(INITIAL_USERS);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState<boolean>(false);
 
   // Navigation & Role State
   const [activeTab, setActiveTab] = useState<TabType>('home');
   const [tabHistory, setTabHistory] = useState<TabType[]>(['home']);
   const [activeRole, setActiveRole] = useState<UserRole>(currentUser?.role || 'QHKH');
-  const [adminSubTab, setAdminSubTab] = useState<'users' | 'system'>('users');
+  const [adminSubTab, setAdminSubTab] = useState<'menu' | 'users' | 'system'>('menu');
 
   const handleNavigateTab = (tab: TabType) => {
     if (tab === activeTab) return;
@@ -282,6 +285,16 @@ export default function App() {
     }
   };
 
+  const handleDeleteUser = async (username: string) => {
+    const res = await ApiClient.deleteUser(username);
+    if (res.success) {
+      setUsers(prev => prev.filter(u => u.user.toLowerCase() !== username.toLowerCase()));
+      showToast(res.message || 'Đã xóa tài khoản cán bộ thành công!', 'success');
+    } else {
+      showToast('Lỗi xóa cán bộ: ' + res.message, 'warning');
+    }
+  };
+
   // 2. Business Handlers
   const handleOpenNewMeeting = (preSelectedCustomerId?: string) => {
     setMeetingPreSelectedKhId(preSelectedCustomerId);
@@ -490,6 +503,34 @@ export default function App() {
     loadData(true);
   };
 
+  const handleSyncAllToSheets = async () => {
+    const res = await ApiClient.syncAllToSheets({
+      customers,
+      meetings,
+      tasks,
+      careEvents,
+      users,
+      emailConfig
+    });
+    if (res.success) {
+      showToast(res.message || 'Đã đồng bộ toàn bộ dữ liệu lên Google Sheets!', 'success');
+      loadData(false);
+    } else {
+      showToast('Lỗi đồng bộ dữ liệu: ' + res.message, 'warning');
+    }
+    return res;
+  };
+
+  const handleFormatDatabaseSheets = async () => {
+    const res = await ApiClient.formatDatabaseSheets();
+    if (res.success) {
+      showToast(res.message || 'Đã định dạng toàn bộ 7 Sheet chuẩn VietinBank!', 'success');
+    } else {
+      showToast('Lỗi định dạng: ' + res.message, 'warning');
+    }
+    return res;
+  };
+
   // Badge calculations for Navigation
   const pendingCareCount = customers.filter(c => c.cheDoChamSoc === 'Bật').length;
   const overdueTasksCount = tasks.filter(t => t.trangThai === 'Quá hạn').length;
@@ -517,6 +558,7 @@ export default function App() {
           setActiveTab('admin');
           setAdminSubTab('users');
         }}
+        onOpenChangePassword={() => setIsChangePasswordOpen(true)}
       />
 
       {/* 2. Toast Notification Banner */}
@@ -666,68 +708,150 @@ export default function App() {
                 tasks={tasks}
                 currentUser={currentUser}
                 users={users}
+                onSelectCustomer={(c) => {
+                  setSelectedCustomer(c);
+                  setIsCustomerDetailOpen(true);
+                }}
               />
             )}
 
             {activeTab === 'admin' && currentUser?.role === 'ADMIN' && (
               <div className="space-y-4 pb-20">
-                {/* Sub-tabs header */}
-                <div className="flex items-center justify-between border-b border-slate-200 bg-white p-2.5 rounded-2xl shadow-2xs gap-2 flex-wrap">
-                  <div className="flex items-center gap-2 flex-wrap">
+                {/* Header khi đã vào chức năng con */}
+                {adminSubTab !== 'menu' && (
+                  <div className="flex items-center justify-between border-b border-slate-200 bg-white p-3 rounded-2xl shadow-2xs gap-2 flex-wrap">
                     <button
-                      id="admin-subtab-users"
-                      onClick={() => setAdminSubTab('users')}
-                      className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-                        adminSubTab === 'users'
-                          ? 'bg-blue-700 text-white shadow-md shadow-blue-700/20'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                      }`}
+                      id="admin-btn-back-menu"
+                      type="button"
+                      onClick={() => setAdminSubTab('menu')}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-800 font-extrabold text-xs sm:text-sm cursor-pointer transition-all active:scale-95 shadow-xs shrink-0"
                     >
-                      <Users className="w-4 h-4" />
-                      <span>Quản lý Cán bộ & User ({users.length})</span>
+                      <ArrowLeft className="w-4 h-4 text-blue-700" />
+                      <span>← Menu Quản trị</span>
                     </button>
 
-                    <button
-                      id="admin-subtab-system"
-                      onClick={() => setAdminSubTab('system')}
-                      className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-                        adminSubTab === 'system'
-                          ? 'bg-blue-700 text-white shadow-md shadow-blue-700/20'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                      }`}
-                    >
-                      <ShieldCheck className="w-4 h-4" />
-                      <span>Hệ thống & Google Sheets</span>
-                    </button>
-                  </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        onClick={() => setAdminSubTab('users')}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          adminSubTab === 'users'
+                            ? 'bg-blue-700 text-white shadow-xs'
+                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        }`}
+                      >
+                        1. Quản lý Cán bộ ({users.length})
+                      </button>
 
-                  {currentUser && (
-                    <div className="text-xs text-slate-600 font-medium flex items-center gap-1.5">
-                      <span>Đang đăng nhập:</span>
-                      <strong className="text-blue-900 font-bold">{currentUser.hoTen}</strong>
-                      <span className="font-mono text-[11px] text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">
-                        @{currentUser.user}
-                      </span>
-                      {currentUser.isLeader && (
-                        <span className="px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 text-[10px] font-bold flex items-center gap-0.5">
-                          <Crown className="w-2.5 h-2.5 text-amber-600" />
-                          Lãnh đạo
-                        </span>
-                      )}
+                      <button
+                        onClick={() => setAdminSubTab('system')}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          adminSubTab === 'system'
+                            ? 'bg-blue-700 text-white shadow-xs'
+                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        }`}
+                      >
+                        2. Hệ thống &amp; Sheets
+                      </button>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
+
+                {/* Mobile Hub Menu cho Admin khi adminSubTab === 'menu' */}
+                {adminSubTab === 'menu' && (
+                  <div className="max-w-xl mx-auto w-full space-y-4 py-2 sm:py-6">
+                    <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-blue-900 rounded-2xl p-5 text-white shadow-md">
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-purple-500/30 text-purple-200 border border-purple-400/30">
+                          <ShieldCheck className="w-3.5 h-3.5 text-purple-300" />
+                          Trung tâm Quản trị Hệ thống
+                        </span>
+                      </div>
+                      <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white">
+                        BẢNG ĐIỀU HÀNH QUẢN TRỊ VIÊN
+                      </h2>
+                      <p className="text-xs sm:text-sm text-slate-300 mt-1">
+                        Chạm chọn chức năng bên dưới để quản lý phân quyền tài khoản hoặc cấu hình kết nối hệ thống.
+                      </p>
+                    </div>
+
+                    <div className="space-y-3 pt-1">
+                      {/* Button 1: Quản lý Cán bộ & User */}
+                      <button
+                        id="admin-menu-btn-users"
+                        type="button"
+                        onClick={() => setAdminSubTab('users')}
+                        className="group w-full p-4 sm:p-5 bg-white hover:bg-blue-50/60 active:bg-blue-100/50 border-2 border-slate-200/90 hover:border-blue-500 rounded-2xl text-left shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer active:scale-[0.98] flex items-center justify-between gap-3.5"
+                      >
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-600/20 group-hover:scale-105 transition-transform">
+                            <Users className="w-6 h-6 sm:w-7 sm:h-7" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm sm:text-base font-black text-slate-900 group-hover:text-blue-800 transition-colors">
+                                1. Quản lý Cán bộ &amp; User
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 shrink-0">
+                                {users.length} tài khoản
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              Thêm mới nhân sự, phân bổ phòng ban, gán quyền Lãnh đạo và cấp lại mật khẩu.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="w-9 h-9 rounded-xl bg-slate-100 group-hover:bg-blue-600 group-hover:text-white text-slate-600 flex items-center justify-center shrink-0 transition-all">
+                          <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
+                        </div>
+                      </button>
+
+                      {/* Button 2: Cấu hình Hệ thống & Google Sheets */}
+                      <button
+                        id="admin-menu-btn-system"
+                        type="button"
+                        onClick={() => setAdminSubTab('system')}
+                        className="group w-full p-4 sm:p-5 bg-white hover:bg-purple-50/60 active:bg-purple-100/50 border-2 border-slate-200/90 hover:border-purple-500 rounded-2xl text-left shadow-xs hover:shadow-md transition-all duration-200 cursor-pointer active:scale-[0.98] flex items-center justify-between gap-3.5"
+                      >
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-700 text-white flex items-center justify-center shrink-0 shadow-md shadow-purple-600/20 group-hover:scale-105 transition-transform">
+                            <ShieldCheck className="w-6 h-6 sm:w-7 sm:h-7" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm sm:text-base font-black text-slate-900 group-hover:text-purple-800 transition-colors">
+                                2. Hệ thống &amp; Google Sheets
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 shrink-0">
+                                Cấu hình
+                              </span>
+                            </div>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              Kiểm tra trạng thái Cloud Sheets, đồng bộ dữ liệu tự động, cấu hình email gửi báo cáo.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="w-9 h-9 rounded-xl bg-slate-100 group-hover:bg-purple-600 group-hover:text-white text-slate-600 flex items-center justify-center shrink-0 transition-all">
+                          <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Sub-tab content */}
-                {adminSubTab === 'users' ? (
+                {adminSubTab === 'users' && (
                   <UserManagementView
                     users={users}
                     onUpdateUser={handleUpdateUser}
                     onResetPassword={handleResetPassword}
                     onAddUser={handleAddUser}
+                    onDeleteUser={handleDeleteUser}
                     currentUser={currentUser}
+                    onOpenChangePassword={() => setIsChangePasswordOpen(true)}
                   />
-                ) : (
+                )}
+
+                {adminSubTab === 'system' && (
                   <AdminSystemHealthView
                     systemHealth={systemHealth}
                     emailConfig={emailConfig}
@@ -740,6 +864,16 @@ export default function App() {
                     onRefreshHealth={() => loadData(false)}
                     onSetupDatabase={handleSetupDatabase}
                     onSetupTrigger={handleSetupTrigger}
+                    onSyncAllToSheets={handleSyncAllToSheets}
+                    onFormatDatabaseSheets={handleFormatDatabaseSheets}
+                    stats={{
+                      customersCount: customers.length,
+                      meetingsCount: meetings.length,
+                      tasksCount: tasks.length,
+                      careEventsCount: careEvents.length,
+                      usersCount: users.length,
+                      emailLogsCount: emailLogs.length
+                    }}
                   />
                 )}
               </div>
@@ -897,6 +1031,16 @@ export default function App() {
         onClose={currentUser ? () => setIsLoginModalOpen(false) : undefined}
         onLogin={handleLogin}
         users={users}
+      />
+
+      {/* Modal 7: Đổi mật khẩu cá nhân */}
+      <ChangePasswordModal
+        isOpen={isChangePasswordOpen}
+        onClose={() => setIsChangePasswordOpen(false)}
+        currentUser={currentUser}
+        onSuccess={(msg) => {
+          showToast(msg, 'success');
+        }}
       />
     </div>
   );

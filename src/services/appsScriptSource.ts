@@ -4,31 +4,47 @@
 
 export const APPS_SCRIPT_SOURCE_CODE = `/**
  * =========================================================================
- * SỔ TAY QHKH – QUẢN LÝ & CHĂM SÓC KHÁCH HÀNG
- * Backend Google Apps Script (Production Ready)
+ * SỔ TAY QHKH – QUẢN LÝ VÀ CHĂM SÓC KHÁCH HÀNG CHỦ ĐỘNG
+ * NGÂN HÀNG TMCP CÔNG THƯƠNG VIỆT NAM - CHI NHÁNH NINH BÌNH
+ * Backend Google Apps Script (Production Ready - Full CRUD & Beautiful Formatting)
  * =========================================================================
  * 
- * Hướng dẫn triển khai nhanh:
- * 1. Mở Google Sheets của bạn.
+ * Hướng dẫn triển khai:
+ * 1. Mở file Google Sheets trên Google Drive của bạn.
  * 2. Vào Tiện ích mở rộng > Apps Script (Extensions > Apps Script).
- * 3. Xoá hết code cũ và dán toàn bộ nội dung file này vào Code.gs.
- * 4. Chạy hàm: setupDatabase() lần đầu tiên để tự động tạo 6 Sheet chuẩn.
- * 5. Chạy hàm: setupTriggers() để tạo trigger tự động kiểm tra chăm sóc hàng ngày.
+ * 3. Xóa hết mã cũ và dán toàn bộ nội dung file này vào Code.gs.
+ * 4. Chạy hàm setupDatabase() lần đầu để tự động khởi tạo và định dạng 7 Sheet chuẩn VietinBank.
+ * 5. Chạy hàm setupTriggers() để tạo trigger tự động kiểm tra nhắc việc hàng ngày (07:00 AM).
  * 6. Bấm Triển khai (Deploy) > Tùy chọn triển khai mới (New deployment):
- *    - Chọn loại: Ứng dụng web (Web app)
+ *    - Loại: Ứng dụng web (Web app)
  *    - Thực thi dưới dạng: Tôi (Execute as: Me)
  *    - Người có quyền truy cập: Bất kỳ ai (Who has access: Anyone)
- * 7. Copy URL Web App (kết thúc bằng /exec) và dán vào phần Cài đặt của WebApp!
+ * 7. Copy URL Web App (đuôi /exec) và dán vào phần Cài đặt của WebApp!
  */
 
 const SHEET_NAMES = {
-  CAN_BO: 'CAN_BO',
   KHACH_HANG: 'KHACH_HANG',
   LICH_SU_GAP: 'LICH_SU_GAP',
   CONG_VIEC: 'CONG_VIEC',
   SU_KIEN_CHAM_SOC: 'SU_KIEN_CHAM_SOC',
+  CAN_BO: 'CAN_BO',
   EMAIL_CONFIG: 'EMAIL_CONFIG',
   EMAIL_LOG: 'EMAIL_LOG'
+};
+
+// Màu sắc nhận diện chuẩn VietinBank
+const BRAND_COLORS = {
+  HEADER_BG: '#004D99',       // Xanh đậm VietinBank
+  HEADER_FG: '#FFFFFF',       // Trắng
+  ZEBRA_BG: '#F8FAFC',        // Nền xen kẽ nhạt
+  BORDER: '#CBD5E1',          // Viền kẻ mảnh
+  HIGHLIGHT_VIP: '#FEF9C3',   // Vàng gold nhẹ cho VIP
+  SUCCESS_BG: '#DCFCE7',      // Xanh lá nhẹ
+  SUCCESS_FG: '#166534',
+  WARNING_BG: '#FEF3C7',      // Vàng hổ phách
+  WARNING_FG: '#92400E',
+  DANGER_BG: '#FFE4E6',       // Đỏ hồng nhẹ
+  DANGER_FG: '#9F1239'
 };
 
 function doGet(e) {
@@ -75,6 +91,10 @@ function handleRequest(e, method) {
         output = setupDatabase();
         break;
 
+      case 'formatDatabaseSheets':
+        output = formatDatabaseSheets();
+        break;
+
       case 'setupTriggers':
         output = setupTriggers();
         break;
@@ -87,6 +107,10 @@ function handleRequest(e, method) {
         output = getUsers();
         break;
 
+      case 'addUser':
+        output = addUser(params.user);
+        break;
+
       case 'updateUser':
         output = updateUser(params.user);
         break;
@@ -95,8 +119,12 @@ function handleRequest(e, method) {
         output = resetUserPassword(params.username, params.newPassword);
         break;
 
-      case 'addUser':
-        output = addUser(params.user);
+      case 'changePassword':
+        output = changePassword(params.username, params.oldPassword, params.newPassword);
+        break;
+
+      case 'deleteUser':
+        output = deleteUser(params.username);
         break;
 
       case 'getInitialData':
@@ -115,6 +143,10 @@ function handleRequest(e, method) {
         output = updateCustomer(params.customer);
         break;
 
+      case 'deleteCustomer':
+        output = deleteCustomer(params.idKh);
+        break;
+
       case 'toggleCareMode':
         output = toggleCareMode(params.idKh, params.cheDoChamSoc);
         break;
@@ -123,12 +155,28 @@ function handleRequest(e, method) {
         output = recordMeeting(params.meeting, params.newTask);
         break;
 
+      case 'updateMeeting':
+        output = updateMeeting(params.meeting);
+        break;
+
+      case 'deleteMeeting':
+        output = deleteMeeting(params.idLichSu);
+        break;
+
       case 'createTask':
         output = createTask(params.task);
         break;
 
+      case 'updateTask':
+        output = updateTask(params.task);
+        break;
+
       case 'updateTaskStatus':
         output = updateTaskStatus(params.idCongViec, params.trangThai);
+        break;
+
+      case 'deleteTask':
+        output = deleteTask(params.idCongViec);
         break;
 
       case 'saveCareEvent':
@@ -155,6 +203,10 @@ function handleRequest(e, method) {
         output = getEmailLogs(params.statusFilter);
         break;
 
+      case 'syncAllToSheets':
+        output = syncAllToSheets(params.payload || params);
+        break;
+
       default:
         output.success = false;
         output.message = 'Hành động (action) không hợp lệ: ' + action;
@@ -173,31 +225,17 @@ function handleRequest(e, method) {
 
 function setupDatabase() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (!ss) return { success: false, message: 'Không tìm thấy Spreadsheet đang kích hoạt.' };
+  if (!ss) {
+    return { success: false, message: 'Không thể mở Spreadsheet hiện tại. Vui lòng kiểm tra quyền.' };
+  }
 
   var createdSheets = [];
 
-  // Sheet 1: CAN_BO (Cán bộ / Users)
-  var cbHeaders = [
-    'STT', 'HO_TEN', 'MA_NV', 'USER', 'PASSWORD', 'PHONG_BAN', 
-    'VI_TRI', 'SDT', 'EMAIL', 'ROLE', 'IS_LEADER', 'TRANG_THAI'
-  ];
-  var cbSheet = ensureSheetWithHeaders(ss, SHEET_NAMES.CAN_BO, cbHeaders, createdSheets);
-  if (cbSheet.getLastRow() === 1) {
-    var defaultStaff = [
-      [0, 'Quản trị viên Hệ thống', 'ADMIN01', 'admin', 'admin123', 'Quản trị hệ thống', 'Quản trị viên', '0943882109', 'trongduc.ict@gmail.com', 'ADMIN', 'true', 'Hoạt động'],
-      [1, 'Đinh Xuân Thắng', '00005568', 'thangdx', '123', 'Ban giám đốc', 'Giám đốc CN', '0979792099', 'THANGDX@VIETINBANK.VN', 'LANH_DAO', 'true', 'Hoạt động'],
-      [2, 'Nguyễn Trọng Đức', '00072898', 'ducnt4', '123', 'Phòng Khách hàng Doanh nghiệp', 'Cán bộ QHKH', '0943882109', 'DUCNT4@VIETINBANK.VN', 'QHKH', 'false', 'Hoạt động'],
-      [3, 'Trần Minh Đức', '00073102', 'ductm', '123', 'Phòng Khách hàng Bán lẻ', 'Cán bộ QHKH', '0912345678', 'DUCTM@VIETINBANK.VN', 'QHKH', 'false', 'Hoạt động']
-    ];
-    cbSheet.getRange(2, 1, defaultStaff.length, defaultStaff[0].length).setValues(defaultStaff);
-  }
-
   var khHeaders = [
-    'ID_KH', 'HO_TEN', 'LOAI_KHACH_HANG', 'TEN_CONG_TY', 'CHUC_VU', 'SDT', 'NGAY_SINH', 'DIA_CHI', 
-    'LATITUDE', 'LONGITUDE', 'GOOGLE_MAP_URL', 'NGANH_NGHE', 
-    'NHU_CAU', 'GHI_CHU', 'PHAN_LOAI', 'CHE_DO_CHAM_SOC', 
-    'CAN_BO_PHU_TRACH', 'USER_CAN_BO', 'EMAIL_CAN_BO', 
+    'ID_KH', 'HO_TEN', 'LOAI_KHACH_HANG', 'TEN_CONG_TY', 'CHUC_VU',
+    'SDT', 'NGAY_SINH', 'DIA_CHI', 'LATITUDE', 'LONGITUDE', 'GOOGLE_MAP_URL',
+    'NGANH_NGHE', 'NHU_CAU', 'GHI_CHU', 'PHAN_LOAI', 'CHE_DO_CHAM_SOC', 'SU_KIEN_CHAM_SOC',
+    'CAN_BO_PHU_TRACH', 'USER_CAN_BO', 'EMAIL_CAN_BO',
     'NGUOI_KHOI_TAO', 'USER_KHOI_TAO', 'PHONG_BAN_KHOI_TAO',
     'NGUOI_CAP_NHAT_CUOI', 'USER_CAP_NHAT_CUOI',
     'NGAY_TAO', 'NGAY_CAP_NHAT', 'TRANG_THAI'
@@ -218,11 +256,13 @@ function setupDatabase() {
   ];
   ensureSheetWithHeaders(ss, SHEET_NAMES.CONG_VIEC, cvHeaders, createdSheets);
 
-  var skHeaders = ['ID_SU_KIEN', 'TEN_SU_KIEN', 'NGAY', 'LOAI', 'SO_NGAY_NHAC_TRUOC', 'TRANG_THAI'];
+  var skHeaders = [
+    'ID_SU_KIEN', 'TEN_SU_KIEN', 'NGAY', 'LOAI', 'SO_NGAY_NHAC_TRUOC', 'TRANG_THAI'
+  ];
   var skSheet = ensureSheetWithHeaders(ss, SHEET_NAMES.SU_KIEN_CHAM_SOC, skHeaders, createdSheets);
   if (skSheet.getLastRow() === 1) {
     var defaultEvents = [
-      ['SK_01', 'Sinh nhật', 'SINH_NHAT', 'SinhNhat', 3, 'Bật'],
+      ['SK_01', 'Sinh nhật khách hàng', 'SINH_NHAT', 'SinhNhat', 3, 'Bật'],
       ['SK_02', 'Ngày Quốc tế Phụ nữ 8/3', '08/03', 'NgayLe', 3, 'Bật'],
       ['SK_03', 'Ngày Phụ nữ Việt Nam 20/10', '20/10', 'NgayLe', 3, 'Bật'],
       ['SK_04', 'Ngày Thương binh Liệt sĩ 27/7', '27/07', 'NgayLe', 2, 'Bật'],
@@ -233,16 +273,31 @@ function setupDatabase() {
     skSheet.getRange(2, 1, defaultEvents.length, defaultEvents[0].length).setValues(defaultEvents);
   }
 
-  var cfgHeaders = ['KEY', 'VALUE'];
+  var cbHeaders = [
+    'STT', 'MA_NV', 'HO_TEN', 'USER', 'PASSWORD', 'PHONG_BAN', 'VI_TRI', 'SDT', 'EMAIL', 'ROLE', 'IS_LEADER', 'TRANG_THAI'
+  ];
+  var cbSheet = ensureSheetWithHeaders(ss, SHEET_NAMES.CAN_BO, cbHeaders, createdSheets);
+  if (cbSheet.getLastRow() === 1) {
+    var defaultUsers = [
+      [1, 'ADMIN01', 'Quản trị viên Hệ thống', 'admin', 'admin123', 'Quản trị hệ thống', 'Quản trị viên cấp cao', '0943882109', 'trongduc.ict@gmail.com', 'ADMIN', 'true', 'Hoạt động'],
+      [2, '00005568', 'Đinh Xuân Thắng', 'thangdx', '123', 'Ban giám đốc', 'Giám đốc CN', '0979792099', 'THANGDX@VIETINBANK.VN', 'LANH_DAO', 'true', 'Hoạt động'],
+      [3, '00006961', 'Bùi Thị Thu Dung', 'dung.bt', '123', 'Ban giám đốc', 'Phó Giám đốc CN (KHDN)', '0945040477', 'DUNG.BT@VIETINBANK.VN', 'LANH_DAO', 'true', 'Hoạt động'],
+      [4, '00006962', 'Đoàn Mạnh Dương', 'duongdm', '123', 'Ban giám đốc', 'Phó Giám đốc Đầu mối Bán lẻ', '0915518668', 'DUONGDM@VIETINBANK.VN', 'LANH_DAO', 'true', 'Hoạt động'],
+      [5, '00057053', 'Nguyễn Trọng Đức', 'ducnt4', '123', 'Phòng Khách hàng Bán lẻ', 'Phó Trưởng phòng Phụ trách', '0914882109', 'DUCNT4@VIETINBANK.VN', 'LANH_DAO', 'true', 'Hoạt động']
+    ];
+    cbSheet.getRange(2, 1, defaultUsers.length, defaultUsers[0].length).setValues(defaultUsers);
+  }
+
+  var cfgHeaders = ['KEY', 'VALUE', 'MO_TA'];
   var cfgSheet = ensureSheetWithHeaders(ss, SHEET_NAMES.EMAIL_CONFIG, cfgHeaders, createdSheets);
   if (cfgSheet.getLastRow() === 1) {
     var defaultConfigs = [
-      ['ADMIN_EMAIL', Session.getActiveUser().getEmail() || 'admin.crm@bank.com.vn'],
-      ['EMAIL_FROM_NAME', 'Sổ Tay QHKH - CRM Bank'],
-      ['EMAIL_ENABLED', 'true'],
-      ['REMINDER_DAYS', '7,3,1'],
-      ['TEST_EMAIL', Session.getActiveUser().getEmail() || 'trongduc.ict@gmail.com'],
-      ['APP_URL', 'https://crm-pocket-bank.web.app']
+      ['ADMIN_EMAIL', 'DUCNT4@VIETINBANK.VN', 'Email nhận thông báo hệ thống'],
+      ['EMAIL_FROM_NAME', 'Sổ Tay QHKH - VietinBank Ninh Bình', 'Tên hiển thị người gửi email'],
+      ['EMAIL_ENABLED', 'true', 'Bật (true) hoặc Tắt (false) gửi email tự động'],
+      ['REMINDER_DAYS', '7,3,1', 'Các mốc ngày gửi email nhắc trước'],
+      ['TEST_EMAIL', 'trongduc.ict@gmail.com', 'Email nhận thử nghiệm'],
+      ['APP_URL', 'https://crm-pocket-bank.web.app', 'Đường dẫn mở WebApp']
     ];
     cfgSheet.getRange(2, 1, defaultConfigs.length, defaultConfigs[0].length).setValues(defaultConfigs);
   }
@@ -254,9 +309,11 @@ function setupDatabase() {
   ];
   ensureSheetWithHeaders(ss, SHEET_NAMES.EMAIL_LOG, logHeaders, createdSheets);
 
+  formatAllSheetsPrettily(ss);
+
   return {
     success: true,
-    message: 'Thiết lập Database thành công 6 Sheet: KHACH_HANG, LICH_SU_GAP, CONG_VIEC, SU_KIEN_CHAM_SOC, EMAIL_CONFIG, EMAIL_LOG.',
+    message: 'Thiết lập và định dạng Database thành công! Đã chuẩn hóa 7 Sheet: KHACH_HANG, LICH_SU_GAP, CONG_VIEC, SU_KIEN_CHAM_SOC, CAN_BO, EMAIL_CONFIG, EMAIL_LOG.',
     data: { createdSheets: createdSheets }
   };
 }
@@ -266,15 +323,1098 @@ function ensureSheetWithHeaders(ss, sheetName, headers, createdList) {
   if (!sheet) {
     sheet = ss.insertSheet(sheetName);
     sheet.appendRow(headers);
-    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#e2e8f0');
-    sheet.setFrozenRows(1);
     createdList.push(sheetName);
   } else if (sheet.getLastRow() === 0) {
     sheet.appendRow(headers);
-    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#e2e8f0');
-    sheet.setFrozenRows(1);
+  } else {
+    var existingHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    var existingMap = {};
+    for (var i = 0; i < existingHeaders.length; i++) {
+      existingMap[String(existingHeaders[i]).trim()] = true;
+    }
+    var missingHeaders = [];
+    for (var j = 0; j < headers.length; j++) {
+      if (!existingMap[headers[j]]) {
+        missingHeaders.push(headers[j]);
+      }
+    }
+    if (missingHeaders.length > 0) {
+      var startCol = sheet.getLastColumn() + 1;
+      sheet.getRange(1, startCol, 1, missingHeaders.length).setValues([missingHeaders]);
+    }
   }
   return sheet;
+}
+
+function formatDatabaseSheets() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) return { success: false, message: 'Spreadsheet không khả dụng.' };
+  formatAllSheetsPrettily(ss);
+  return {
+    success: true,
+    message: 'Đã định dạng thành công toàn bộ 7 Sheet theo chuẩn nhận diện VietinBank: dòng tiêu đề xanh #004D99, viền kẻ mảnh, độ rộng cột tối ưu, đóng băng dòng đầu và bật bộ lọc tự động.'
+  };
+}
+
+function formatAllSheetsPrettily(ss) {
+  var sheetConfigs = [
+    {
+      name: SHEET_NAMES.KHACH_HANG,
+      colWidths: {
+        1: 120, 2: 210, 3: 130, 4: 230, 5: 140, 6: 120, 7: 110, 8: 260, 9: 100, 10: 100,
+        11: 140, 12: 150, 13: 200, 14: 200, 15: 160, 16: 120, 17: 180, 18: 180, 19: 110, 20: 190,
+        21: 170, 22: 120, 23: 170, 24: 170, 25: 120, 26: 150, 27: 150, 28: 120
+      }
+    },
+    {
+      name: SHEET_NAMES.LICH_SU_GAP,
+      colWidths: {
+        1: 120, 2: 120, 3: 150, 4: 130, 5: 100, 6: 100, 7: 140, 8: 300, 9: 220, 10: 160,
+        11: 220, 12: 140, 13: 200, 14: 180, 15: 150
+      }
+    },
+    {
+      name: SHEET_NAMES.CONG_VIEC,
+      colWidths: {
+        1: 120, 2: 120, 3: 320, 4: 140, 5: 180, 6: 140, 7: 150, 8: 150, 9: 200
+      }
+    },
+    {
+      name: SHEET_NAMES.SU_KIEN_CHAM_SOC,
+      colWidths: {
+        1: 110, 2: 240, 3: 120, 4: 120, 5: 140, 6: 120
+      }
+    },
+    {
+      name: SHEET_NAMES.CAN_BO,
+      colWidths: {
+        1: 60, 2: 110, 3: 200, 4: 120, 5: 110, 6: 180, 7: 180, 8: 120, 9: 200, 10: 110, 11: 100, 12: 120
+      }
+    },
+    {
+      name: SHEET_NAMES.EMAIL_CONFIG,
+      colWidths: { 1: 180, 2: 260, 3: 280 }
+    },
+    {
+      name: SHEET_NAMES.EMAIL_LOG,
+      colWidths: {
+        1: 120, 2: 150, 3: 120, 4: 200, 5: 220, 6: 160, 7: 120, 8: 120, 9: 150, 10: 120, 11: 260, 12: 160
+      }
+    }
+  ];
+
+  sheetConfigs.forEach(function(cfg) {
+    var sheet = ss.getSheetByName(cfg.name);
+    if (!sheet) return;
+
+    var lastRow = sheet.getLastRow();
+    var lastCol = sheet.getLastColumn();
+    if (lastCol === 0) return;
+
+    var headerRange = sheet.getRange(1, 1, 1, lastCol);
+    headerRange
+      .setBackground(BRAND_COLORS.HEADER_BG)
+      .setFontColor(BRAND_COLORS.HEADER_FG)
+      .setFontWeight('bold')
+      .setFontSize(11)
+      .setVerticalAlignment('middle')
+      .setHorizontalAlignment('center')
+      .setWrap(true);
+
+    sheet.setRowHeight(1, 38);
+    sheet.setFrozenRows(1);
+
+    var totalRows = Math.max(lastRow, 2);
+    var dataRange = sheet.getRange(1, 1, totalRows, lastCol);
+    dataRange.setBorder(true, true, true, true, true, true, BRAND_COLORS.BORDER, SpreadsheetApp.BorderStyle.SOLID);
+
+    if (lastRow > 1) {
+      sheet.setRowHeights(2, lastRow - 1, 28);
+      for (var r = 2; r <= lastRow; r++) {
+        var rowRange = sheet.getRange(r, 1, 1, lastCol);
+        rowRange.setFontSize(10).setVerticalAlignment('middle');
+        if (r % 2 === 1) {
+          rowRange.setBackground(BRAND_COLORS.ZEBRA_BG);
+        } else {
+          rowRange.setBackground('#FFFFFF');
+        }
+      }
+    }
+
+    if (cfg.colWidths) {
+      Object.keys(cfg.colWidths).forEach(function(colIndexStr) {
+        var c = parseInt(colIndexStr, 10);
+        if (c <= lastCol) {
+          sheet.setColumnWidth(c, cfg.colWidths[colIndexStr]);
+        }
+      });
+    }
+
+    try {
+      if (!sheet.getFilter() && lastRow >= 1) {
+        sheet.getDataRange().createFilter();
+      }
+    } catch (e) {}
+  });
+}
+
+function getUsers() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss ? ss.getSheetByName(SHEET_NAMES.CAN_BO) : null;
+  if (!sheet) return { success: false, message: 'Bảng CAN_BO không tồn tại.' };
+
+  var rows = sheetToObjects(sheet);
+  var users = rows.map(mapUserFromSheet);
+
+  return {
+    success: true,
+    message: 'Tải danh sách cán bộ thành công.',
+    data: users
+  };
+}
+
+function loginUser(username, password) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss ? ss.getSheetByName(SHEET_NAMES.CAN_BO) : null;
+  if (!sheet) return { success: false, message: 'Bảng CAN_BO không tồn tại.' };
+
+  var uName = String(username || '').trim().toLowerCase();
+  var pWord = String(password || '').trim();
+
+  var rows = sheetToObjects(sheet);
+  var users = rows.map(mapUserFromSheet);
+
+  var found = null;
+  for (var i = 0; i < users.length; i++) {
+    if (users[i].user.toLowerCase() === uName) {
+      found = users[i];
+      break;
+    }
+  }
+
+  if (!found) {
+    return { success: false, message: 'Tên đăng nhập không tồn tại trong danh bạ cán bộ ngân hàng.' };
+  }
+
+  if (found.trangThai === 'Khóa') {
+    return { success: false, message: 'Tài khoản cán bộ này đã bị khóa. Vui lòng liên hệ Quản trị viên.' };
+  }
+
+  var expectedPwd = found.password || (found.user === 'admin' ? 'admin123' : '123');
+  if (pWord !== expectedPwd) {
+    return { success: false, message: 'Mật khẩu không chính xác. Vui lòng kiểm tra lại!' };
+  }
+
+  var safeUser = cloneObject(found);
+  delete safeUser.password;
+
+  return {
+    success: true,
+    message: 'Đăng nhập thành công! Chào mừng ' + found.hoTen + ' (' + found.viTri + ').',
+    data: safeUser
+  };
+}
+
+function addUser(user) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss ? ss.getSheetByName(SHEET_NAMES.CAN_BO) : null;
+  if (!sheet) return { success: false, message: 'Bảng CAN_BO không tồn tại.' };
+
+  var headerMap = getHeaderMap(sheet);
+  var data = sheet.getDataRange().getValues();
+  var userCol = headerMap['USER'];
+
+  var targetUser = String(user.user || '').trim().toLowerCase();
+  if (userCol !== undefined) {
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][userCol]).trim().toLowerCase() === targetUser) {
+        return { success: false, message: 'Tên đăng nhập "' + user.user + '" đã tồn tại.' };
+      }
+    }
+  }
+
+  var newRow = [];
+  var lastCol = sheet.getLastColumn();
+  for (var c = 0; c < lastCol; c++) newRow.push('');
+
+  setCellByHeader(newRow, headerMap, 'STT', sheet.getLastRow());
+  setCellByHeader(newRow, headerMap, 'MA_NV', user.maNv || '');
+  setCellByHeader(newRow, headerMap, 'HO_TEN', user.hoTen || '');
+  setCellByHeader(newRow, headerMap, 'USER', user.user || '');
+  setCellByHeader(newRow, headerMap, 'PASSWORD', user.password || '123');
+  setCellByHeader(newRow, headerMap, 'PHONG_BAN', user.phongBan || '');
+  setCellByHeader(newRow, headerMap, 'VI_TRI', user.viTri || '');
+  setCellByHeader(newRow, headerMap, 'SDT', user.sdt || '');
+  setCellByHeader(newRow, headerMap, 'EMAIL', user.email || '');
+  setCellByHeader(newRow, headerMap, 'ROLE', user.role || 'QHKH');
+  setCellByHeader(newRow, headerMap, 'IS_LEADER', String(user.isLeader || false));
+  setCellByHeader(newRow, headerMap, 'TRANG_THAI', user.trangThai || 'Hoạt động');
+
+  sheet.appendRow(newRow);
+  formatSingleRow(sheet, sheet.getLastRow());
+
+  return { success: true, message: 'Thêm cán bộ thành công.', data: user };
+}
+
+function updateUser(user) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss ? ss.getSheetByName(SHEET_NAMES.CAN_BO) : null;
+  if (!sheet) return { success: false, message: 'Bảng CAN_BO không tồn tại.' };
+
+  var headerMap = getHeaderMap(sheet);
+  var userCol = headerMap['USER'];
+  if (userCol === undefined) return { success: false, message: 'Không tìm thấy cột USER trong bảng CAN_BO.' };
+
+  var data = sheet.getDataRange().getValues();
+  var targetUser = String(user.user || '').trim().toLowerCase();
+  var targetRow = -1;
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][userCol]).trim().toLowerCase() === targetUser) {
+      targetRow = i + 1;
+      break;
+    }
+  }
+
+  if (targetRow === -1) {
+    return { success: false, message: 'Không tìm thấy cán bộ với tên đăng nhập: ' + user.user };
+  }
+
+  updateSheetRowByHeaderMap(sheet, targetRow, headerMap, {
+    MA_NV: user.maNv,
+    HO_TEN: user.hoTen,
+    PHONG_BAN: user.phongBan,
+    VI_TRI: user.viTri,
+    SDT: user.sdt,
+    EMAIL: user.email,
+    ROLE: user.role,
+    IS_LEADER: user.isLeader !== undefined ? String(user.isLeader) : undefined,
+    TRANG_THAI: user.trangThai,
+    PASSWORD: user.password
+  });
+
+  return { success: true, message: 'Cập nhật cán bộ thành công.', data: user };
+}
+
+function resetUserPassword(username, newPassword) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss ? ss.getSheetByName(SHEET_NAMES.CAN_BO) : null;
+  if (!sheet) return { success: false, message: 'Bảng CAN_BO không tồn tại.' };
+
+  var headerMap = getHeaderMap(sheet);
+  var userCol = headerMap['USER'];
+  var pwdCol = headerMap['PASSWORD'];
+  if (userCol === undefined || pwdCol === undefined) {
+    return { success: false, message: 'Cấu trúc bảng CAN_BO không đúng.' };
+  }
+
+  var data = sheet.getDataRange().getValues();
+  var targetUser = String(username || '').trim().toLowerCase();
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][userCol]).trim().toLowerCase() === targetUser) {
+      var pwd = newPassword || (targetUser === 'admin' ? 'admin123' : '123');
+      sheet.getRange(i + 1, pwdCol + 1).setValue(pwd);
+      return { success: true, message: 'Đã đặt lại mật khẩu cho cán bộ ' + username + ' thành: ' + pwd };
+    }
+  }
+
+  return { success: false, message: 'Không tìm thấy cán bộ: ' + username };
+}
+
+function changePassword(username, oldPassword, newPassword) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss ? ss.getSheetByName(SHEET_NAMES.CAN_BO) : null;
+  if (!sheet) return { success: false, message: 'Bảng CAN_BO không tồn tại.' };
+
+  var headerMap = getHeaderMap(sheet);
+  var userCol = headerMap['USER'];
+  var pwdCol = headerMap['PASSWORD'];
+  if (userCol === undefined || pwdCol === undefined) {
+    return { success: false, message: 'Cấu trúc bảng CAN_BO không đúng.' };
+  }
+
+  var data = sheet.getDataRange().getValues();
+  var targetUser = String(username || '').trim().toLowerCase();
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][userCol]).trim().toLowerCase() === targetUser) {
+      var currentPassword = String(data[i][pwdCol] || (targetUser === 'admin' ? 'admin123' : '123'));
+      if (String(oldPassword) !== currentPassword) {
+        return { success: false, message: 'Mật khẩu hiện tại không chính xác. Vui lòng thử lại!' };
+      }
+      sheet.getRange(i + 1, pwdCol + 1).setValue(String(newPassword));
+      return { success: true, message: 'Đổi mật khẩu thành công! Mật khẩu mới đã được lưu trữ trên Google Sheet.' };
+    }
+  }
+
+  return { success: false, message: 'Không tìm thấy tài khoản cán bộ: ' + username };
+}
+
+function deleteUser(username) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss ? ss.getSheetByName(SHEET_NAMES.CAN_BO) : null;
+  if (!sheet) return { success: false, message: 'Bảng CAN_BO không tồn tại.' };
+
+  var headerMap = getHeaderMap(sheet);
+  var userCol = headerMap['USER'];
+  if (userCol === undefined) return { success: false, message: 'Cột USER không tồn tại.' };
+
+  var data = sheet.getDataRange().getValues();
+  var targetUser = String(username || '').trim().toLowerCase();
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][userCol]).trim().toLowerCase() === targetUser) {
+      sheet.deleteRow(i + 1);
+      return { success: true, message: 'Đã xóa tài khoản cán bộ: ' + username };
+    }
+  }
+
+  return { success: false, message: 'Không tìm thấy cán bộ: ' + username };
+}
+
+function getCustomers(userEmail, userRole) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss ? ss.getSheetByName(SHEET_NAMES.KHACH_HANG) : null;
+  if (!sheet) return { success: true, data: [] };
+
+  var raw = sheetToObjects(sheet);
+  var customers = raw.map(mapCustomerFromSheet);
+
+  if (userRole === 'QHKH' && userEmail) {
+    customers = customers.filter(function(c) {
+      return (c.emailCanBo && c.emailCanBo.toLowerCase() === userEmail.toLowerCase()) ||
+             (c.canBoPhuTrach && userEmail.toLowerCase().indexOf(c.canBoPhuTrach.toLowerCase()) !== -1);
+    });
+  }
+
+  return { success: true, data: customers };
+}
+
+function addCustomer(cust) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss ? ss.getSheetByName(SHEET_NAMES.KHACH_HANG) : null;
+  if (!sheet) return { success: false, message: 'Bảng KHACH_HANG không tồn tại.' };
+
+  var headerMap = getHeaderMap(sheet);
+  var idKh = cust.idKh || (cust.sdt ? String(cust.sdt).replace(/\D/g, '') : ('KH_' + Utilities.getUuid().slice(0, 8).toUpperCase()));
+  var nowStr = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
+
+  var newRow = [];
+  var lastCol = sheet.getLastColumn();
+  for (var c = 0; c < lastCol; c++) newRow.push('');
+
+  setCellByHeader(newRow, headerMap, 'ID_KH', idKh);
+  setCellByHeader(newRow, headerMap, 'HO_TEN', cust.hoTen || '');
+  setCellByHeader(newRow, headerMap, 'LOAI_KHACH_HANG', cust.loaiKhachHang || 'Cá nhân');
+  setCellByHeader(newRow, headerMap, 'TEN_CONG_TY', cust.tenCongTy || '');
+  setCellByHeader(newRow, headerMap, 'CHUC_VU', cust.chucVu || '');
+  setCellByHeader(newRow, headerMap, 'SDT', cust.sdt || '');
+  setCellByHeader(newRow, headerMap, 'NGAY_SINH', cust.ngaySinh || '');
+  setCellByHeader(newRow, headerMap, 'DIA_CHI', cust.diaChi || '');
+  setCellByHeader(newRow, headerMap, 'LATITUDE', cust.latitude || '');
+  setCellByHeader(newRow, headerMap, 'LONGITUDE', cust.longitude || '');
+  setCellByHeader(newRow, headerMap, 'GOOGLE_MAP_URL', cust.googleMapUrl || '');
+  setCellByHeader(newRow, headerMap, 'NGANH_NGHE', cust.nganhNghe || '');
+  setCellByHeader(newRow, headerMap, 'NHU_CAU', cust.nhuCau || '');
+  setCellByHeader(newRow, headerMap, 'GHI_CHU', cust.ghiChu || '');
+  setCellByHeader(newRow, headerMap, 'PHAN_LOAI', cust.phanLoai || 'Đang tiếp thị');
+  setCellByHeader(newRow, headerMap, 'CHE_DO_CHAM_SOC', cust.cheDoChamSoc || 'Tắt');
+  setCellByHeader(newRow, headerMap, 'SU_KIEN_CHAM_SOC', Array.isArray(cust.suKienChamSoc) ? cust.suKienChamSoc.join(', ') : (cust.suKienChamSoc || ''));
+  setCellByHeader(newRow, headerMap, 'CAN_BO_PHU_TRACH', cust.canBoPhuTrach || '');
+  setCellByHeader(newRow, headerMap, 'USER_CAN_BO', cust.userCanBo || '');
+  setCellByHeader(newRow, headerMap, 'EMAIL_CAN_BO', cust.emailCanBo || '');
+  setCellByHeader(newRow, headerMap, 'NGUOI_KHOI_TAO', cust.nguoiKhoiTao || cust.canBoPhuTrach || '');
+  setCellByHeader(newRow, headerMap, 'USER_KHOI_TAO', cust.userKhoiTao || cust.userCanBo || '');
+  setCellByHeader(newRow, headerMap, 'PHONG_BAN_KHOI_TAO', cust.phongBanKhoiTao || '');
+  setCellByHeader(newRow, headerMap, 'NGUOI_CAP_NHAT_CUOI', cust.nguoiCapNhatCuoi || cust.canBoPhuTrach || '');
+  setCellByHeader(newRow, headerMap, 'USER_CAP_NHAT_CUOI', cust.userCapNhatCuoi || cust.userCanBo || '');
+  setCellByHeader(newRow, headerMap, 'NGAY_TAO', nowStr);
+  setCellByHeader(newRow, headerMap, 'NGAY_CAP_NHAT', nowStr);
+  setCellByHeader(newRow, headerMap, 'TRANG_THAI', cust.trangThai || 'Hoạt động');
+
+  sheet.appendRow(newRow);
+  formatSingleRow(sheet, sheet.getLastRow());
+
+  cust.idKh = idKh;
+  cust.ngayTao = nowStr;
+  cust.ngayCapNhat = nowStr;
+
+  return {
+    success: true,
+    message: 'Thêm khách hàng thành công vào Google Sheet.',
+    data: cust
+  };
+}
+
+function updateCustomer(cust) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss ? ss.getSheetByName(SHEET_NAMES.KHACH_HANG) : null;
+  if (!sheet) return { success: false, message: 'Bảng KHACH_HANG không tồn tại.' };
+
+  var headerMap = getHeaderMap(sheet);
+  var idCol = headerMap['ID_KH'];
+  if (idCol === undefined) return { success: false, message: 'Không tìm thấy cột ID_KH.' };
+
+  var data = sheet.getDataRange().getValues();
+  var targetRow = -1;
+  var targetId = String(cust.idKh).trim();
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idCol]).trim() === targetId) {
+      targetRow = i + 1;
+      break;
+    }
+  }
+
+  if (targetRow === -1) {
+    return { success: false, message: 'Không tìm thấy khách hàng với mã: ' + cust.idKh };
+  }
+
+  var nowStr = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
+  var updates = {
+    HO_TEN: cust.hoTen,
+    LOAI_KHACH_HANG: cust.loaiKhachHang,
+    TEN_CONG_TY: cust.tenCongTy,
+    CHUC_VU: cust.chucVu,
+    SDT: cust.sdt,
+    NGAY_SINH: cust.ngaySinh,
+    DIA_CHI: cust.diaChi,
+    LATITUDE: cust.latitude,
+    LONGITUDE: cust.longitude,
+    GOOGLE_MAP_URL: cust.googleMapUrl,
+    NGANH_NGHE: cust.nganhNghe,
+    NHU_CAU: cust.nhuCau,
+    GHI_CHU: cust.ghiChu,
+    PHAN_LOAI: cust.phanLoai,
+    CHE_DO_CHAM_SOC: cust.cheDoChamSoc,
+    SU_KIEN_CHAM_SOC: Array.isArray(cust.suKienChamSoc) ? cust.suKienChamSoc.join(', ') : cust.suKienChamSoc,
+    CAN_BO_PHU_TRACH: cust.canBoPhuTrach,
+    USER_CAN_BO: cust.userCanBo,
+    EMAIL_CAN_BO: cust.emailCanBo,
+    NGUOI_KHOI_TAO: cust.nguoiKhoiTao,
+    USER_KHOI_TAO: cust.userKhoiTao,
+    PHONG_BAN_KHOI_TAO: cust.phongBanKhoiTao,
+    NGUOI_CAP_NHAT_CUOI: cust.nguoiCapNhatCuoi,
+    USER_CAP_NHAT_CUOI: cust.userCapNhatCuoi,
+    NGAY_CAP_NHAT: nowStr,
+    TRANG_THAI: cust.trangThai
+  };
+
+  updateSheetRowByHeaderMap(sheet, targetRow, headerMap, updates);
+
+  cust.ngayCapNhat = nowStr;
+  return {
+    success: true,
+    message: 'Cập nhật thông tin khách hàng thành công trên Google Sheet.',
+    data: cust
+  };
+}
+
+function deleteCustomer(idKh) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss ? ss.getSheetByName(SHEET_NAMES.KHACH_HANG) : null;
+  if (!sheet) return { success: false, message: 'Bảng KHACH_HANG không tồn tại.' };
+
+  var headerMap = getHeaderMap(sheet);
+  var idCol = headerMap['ID_KH'];
+  if (idCol === undefined) return { success: false, message: 'Cột ID_KH không tồn tại.' };
+
+  var data = sheet.getDataRange().getValues();
+  var targetId = String(idKh).trim();
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idCol]).trim() === targetId) {
+      sheet.deleteRow(i + 1);
+      return { success: true, message: 'Đã xóa khách hàng khỏi Google Sheet.' };
+    }
+  }
+
+  return { success: false, message: 'Không tìm thấy khách hàng: ' + idKh };
+}
+
+function toggleCareMode(idKh, mode) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss ? ss.getSheetByName(SHEET_NAMES.KHACH_HANG) : null;
+  if (!sheet) return { success: false, message: 'Bảng KHACH_HANG không tồn tại.' };
+
+  var headerMap = getHeaderMap(sheet);
+  var idCol = headerMap['ID_KH'];
+  var careCol = headerMap['CHE_DO_CHAM_SOC'];
+  var updateCol = headerMap['NGAY_CAP_NHAT'];
+
+  if (idCol === undefined || careCol === undefined) {
+    return { success: false, message: 'Cấu trúc bảng KHACH_HANG chưa đúng.' };
+  }
+
+  var data = sheet.getDataRange().getValues();
+  var targetId = String(idKh).trim();
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idCol]).trim() === targetId) {
+      var curMode = data[i][careCol];
+      var targetMode = (mode === 'Bật' || mode === 'Tắt') ? mode : (curMode === 'Bật' ? 'Tắt' : 'Bật');
+      sheet.getRange(i + 1, careCol + 1).setValue(targetMode);
+
+      var nowStr = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
+      if (updateCol !== undefined) {
+        sheet.getRange(i + 1, updateCol + 1).setValue(nowStr);
+      }
+
+      return {
+        success: true,
+        message: 'Đã ' + targetMode + ' Chế độ chăm sóc cho khách hàng.',
+        data: { idKh: idKh, cheDoChamSoc: targetMode }
+      };
+    }
+  }
+
+  return { success: false, message: 'Không tìm thấy khách hàng: ' + idKh };
+}
+
+function recordMeeting(meeting, newTask) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var lsgSheet = ss ? ss.getSheetByName(SHEET_NAMES.LICH_SU_GAP) : null;
+  var khSheet = ss ? ss.getSheetByName(SHEET_NAMES.KHACH_HANG) : null;
+  var cvSheet = ss ? ss.getSheetByName(SHEET_NAMES.CONG_VIEC) : null;
+
+  if (!lsgSheet) return { success: false, message: 'Bảng LICH_SU_GAP không tồn tại.' };
+
+  var idLichSu = meeting.idLichSu || ('LS_' + Utilities.getUuid().slice(0, 8).toUpperCase());
+  var nowStr = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
+
+  var headerMap = getHeaderMap(lsgSheet);
+  var newRow = [];
+  for (var c = 0; c < lsgSheet.getLastColumn(); c++) newRow.push('');
+
+  setCellByHeader(newRow, headerMap, 'ID_LICH_SU', idLichSu);
+  setCellByHeader(newRow, headerMap, 'ID_KH', meeting.idKh || '');
+  setCellByHeader(newRow, headerMap, 'THOI_GIAN_GAP', meeting.thoiGianGap || nowStr);
+  setCellByHeader(newRow, headerMap, 'HINH_THUC_GAP', meeting.hinhThucGap || 'Gặp trực tiếp');
+  setCellByHeader(newRow, headerMap, 'LATITUDE', meeting.latitude || '');
+  setCellByHeader(newRow, headerMap, 'LONGITUDE', meeting.longitude || '');
+  setCellByHeader(newRow, headerMap, 'GOOGLE_MAP_URL', meeting.googleMapUrl || '');
+  setCellByHeader(newRow, headerMap, 'NOI_DUNG_TRAO_DOI', meeting.noiDungTraoDoi || '');
+  setCellByHeader(newRow, headerMap, 'NHU_CAU_KHACH_HANG', meeting.nhuCauKhachHang || '');
+  setCellByHeader(newRow, headerMap, 'TINH_TRANG_SAU_GAP', meeting.tinhTrangSauGap || 'Đã gặp khách hàng');
+  setCellByHeader(newRow, headerMap, 'CONG_VIEC_TIEP_THEO', meeting.congViecTiepTheo || '');
+  setCellByHeader(newRow, headerMap, 'NGAY_HEN_LIEN_HE', meeting.ngayHenLienHe || '');
+  setCellByHeader(newRow, headerMap, 'GHI_CHU', meeting.ghiChu || '');
+  setCellByHeader(newRow, headerMap, 'CAN_BO_THUC_HIEN', meeting.canBoThucHien || '');
+  setCellByHeader(newRow, headerMap, 'THOI_GIAN_CAP_NHAT', nowStr);
+
+  lsgSheet.appendRow(newRow);
+  formatSingleRow(lsgSheet, lsgSheet.getLastRow());
+
+  if (khSheet) {
+    var khHeaderMap = getHeaderMap(khSheet);
+    var khIdCol = khHeaderMap['ID_KH'];
+    var khUpdCol = khHeaderMap['NGAY_CAP_NHAT'];
+    var khDemCol = khHeaderMap['NHU_CAU'];
+    var khData = khSheet.getDataRange().getValues();
+
+    for (var i = 1; i < khData.length; i++) {
+      if (String(khData[i][khIdCol]).trim() === String(meeting.idKh).trim()) {
+        if (khUpdCol !== undefined) khSheet.getRange(i + 1, khUpdCol + 1).setValue(nowStr);
+        if (khDemCol !== undefined && meeting.nhuCauKhachHang) {
+          khSheet.getRange(i + 1, khDemCol + 1).setValue(meeting.nhuCauKhachHang);
+        }
+        break;
+      }
+    }
+  }
+
+  var createdTaskData = null;
+  if (newTask && newTask.noiDung && cvSheet) {
+    var idCv = 'CV_' + Utilities.getUuid().slice(0, 8).toUpperCase();
+    var cvHeaderMap = getHeaderMap(cvSheet);
+    var cvRow = [];
+    for (var k = 0; k < cvSheet.getLastColumn(); k++) cvRow.push('');
+
+    setCellByHeader(cvRow, cvHeaderMap, 'ID_CONG_VIEC', idCv);
+    setCellByHeader(cvRow, cvHeaderMap, 'ID_KH', meeting.idKh || '');
+    setCellByHeader(cvRow, cvHeaderMap, 'NOI_DUNG', newTask.noiDung);
+    setCellByHeader(cvRow, cvHeaderMap, 'NGAY_HAN', newTask.ngayHan || '');
+    setCellByHeader(cvRow, cvHeaderMap, 'CAN_BO', meeting.canBoThucHien || '');
+    setCellByHeader(cvRow, cvHeaderMap, 'TRANG_THAI', 'Chưa thực hiện');
+    setCellByHeader(cvRow, cvHeaderMap, 'NGAY_TAO', nowStr);
+    setCellByHeader(cvRow, cvHeaderMap, 'NGAY_HOAN_THANH', '');
+    setCellByHeader(cvRow, cvHeaderMap, 'GHI_CHU', newTask.ghiChu || '');
+
+    cvSheet.appendRow(cvRow);
+    formatSingleRow(cvSheet, cvSheet.getLastRow());
+
+    createdTaskData = {
+      idCongViec: idCv,
+      idKh: meeting.idKh,
+      noiDung: newTask.noiDung,
+      ngayHan: newTask.ngayHan,
+      canBo: meeting.canBoThucHien,
+      trangThai: 'Chưa thực hiện',
+      ngayTao: nowStr
+    };
+  }
+
+  meeting.idLichSu = idLichSu;
+  meeting.thoiGianCapNhat = nowStr;
+
+  return {
+    success: true,
+    message: 'Đã ghi nhận cuộc gặp thành công lên Google Sheet!',
+    data: { meeting: meeting, task: createdTaskData }
+  };
+}
+
+function updateMeeting(meeting) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss ? ss.getSheetByName(SHEET_NAMES.LICH_SU_GAP) : null;
+  if (!sheet) return { success: false, message: 'Bảng LICH_SU_GAP không tồn tại.' };
+
+  var headerMap = getHeaderMap(sheet);
+  var idCol = headerMap['ID_LICH_SU'];
+  if (idCol === undefined) return { success: false, message: 'Cột ID_LICH_SU không tồn tại.' };
+
+  var data = sheet.getDataRange().getValues();
+  var targetId = String(meeting.idLichSu).trim();
+  var targetRow = -1;
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idCol]).trim() === targetId) {
+      targetRow = i + 1;
+      break;
+    }
+  }
+
+  if (targetRow === -1) {
+    return { success: false, message: 'Không tìm thấy cuộc gặp: ' + meeting.idLichSu };
+  }
+
+  var nowStr = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
+  updateSheetRowByHeaderMap(sheet, targetRow, headerMap, {
+    THOI_GIAN_GAP: meeting.thoiGianGap,
+    HINH_THUC_GAP: meeting.hinhThucGap,
+    LATITUDE: meeting.latitude,
+    LONGITUDE: meeting.longitude,
+    GOOGLE_MAP_URL: meeting.googleMapUrl,
+    NOI_DUNG_TRAO_DOI: meeting.noiDungTraoDoi,
+    NHU_CAU_KHACH_HANG: meeting.nhuCauKhachHang,
+    TINH_TRANG_SAU_GAP: meeting.tinhTrangSauGap,
+    CONG_VIEC_TIEP_THEO: meeting.congViecTiepTheo,
+    NGAY_HEN_LIEN_HE: meeting.ngayHenLienHe,
+    GHI_CHU: meeting.ghiChu,
+    CAN_BO_THUC_HIEN: meeting.canBoThucHien,
+    THOI_GIAN_CAP_NHAT: nowStr
+  });
+
+  return { success: true, message: 'Cập nhật cuộc gặp thành công trên Google Sheet.', data: meeting };
+}
+
+function deleteMeeting(idLichSu) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss ? ss.getSheetByName(SHEET_NAMES.LICH_SU_GAP) : null;
+  if (!sheet) return { success: false, message: 'Bảng LICH_SU_GAP không tồn tại.' };
+
+  var headerMap = getHeaderMap(sheet);
+  var idCol = headerMap['ID_LICH_SU'];
+  if (idCol === undefined) return { success: false, message: 'Cột ID_LICH_SU không tồn tại.' };
+
+  var data = sheet.getDataRange().getValues();
+  var targetId = String(idLichSu).trim();
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idCol]).trim() === targetId) {
+      sheet.deleteRow(i + 1);
+      return { success: true, message: 'Đã xóa cuộc gặp khỏi Google Sheet.' };
+    }
+  }
+
+  return { success: false, message: 'Không tìm thấy cuộc gặp: ' + idLichSu };
+}
+
+function createTask(task) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss ? ss.getSheetByName(SHEET_NAMES.CONG_VIEC) : null;
+  if (!sheet) return { success: false, message: 'Bảng CONG_VIEC không tồn tại.' };
+
+  var idCv = task.idCongViec || ('CV_' + Utilities.getUuid().slice(0, 8).toUpperCase());
+  var nowStr = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
+
+  var headerMap = getHeaderMap(sheet);
+  var newRow = [];
+  for (var c = 0; c < sheet.getLastColumn(); c++) newRow.push('');
+
+  setCellByHeader(newRow, headerMap, 'ID_CONG_VIEC', idCv);
+  setCellByHeader(newRow, headerMap, 'ID_KH', task.idKh || '');
+  setCellByHeader(newRow, headerMap, 'NOI_DUNG', task.noiDung || '');
+  setCellByHeader(newRow, headerMap, 'NGAY_HAN', task.ngayHan || '');
+  setCellByHeader(newRow, headerMap, 'CAN_BO', task.canBo || '');
+  setCellByHeader(newRow, headerMap, 'TRANG_THAI', task.trangThai || 'Chưa thực hiện');
+  setCellByHeader(newRow, headerMap, 'NGAY_TAO', nowStr);
+  setCellByHeader(newRow, headerMap, 'NGAY_HOAN_THANH', task.ngayHoanThanh || '');
+  setCellByHeader(newRow, headerMap, 'GHI_CHU', task.ghiChu || '');
+
+  sheet.appendRow(newRow);
+  formatSingleRow(sheet, sheet.getLastRow());
+
+  task.idCongViec = idCv;
+  task.ngayTao = nowStr;
+
+  return { success: true, message: 'Tạo công việc thành công trên Google Sheet.', data: task };
+}
+
+function updateTask(task) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss ? ss.getSheetByName(SHEET_NAMES.CONG_VIEC) : null;
+  if (!sheet) return { success: false, message: 'Bảng CONG_VIEC không tồn tại.' };
+
+  var headerMap = getHeaderMap(sheet);
+  var idCol = headerMap['ID_CONG_VIEC'];
+  if (idCol === undefined) return { success: false, message: 'Cột ID_CONG_VIEC không tồn tại.' };
+
+  var data = sheet.getDataRange().getValues();
+  var targetId = String(task.idCongViec).trim();
+  var targetRow = -1;
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idCol]).trim() === targetId) {
+      targetRow = i + 1;
+      break;
+    }
+  }
+
+  if (targetRow === -1) {
+    return { success: false, message: 'Không tìm thấy công việc: ' + task.idCongViec };
+  }
+
+  var updates = {
+    NOI_DUNG: task.noiDung,
+    NGAY_HAN: task.ngayHan,
+    CAN_BO: task.canBo,
+    TRANG_THAI: task.trangThai,
+    NGAY_HOAN_THANH: task.trangThai === 'Hoàn thành' ? (task.ngayHoanThanh || Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss')) : '',
+    GHI_CHU: task.ghiChu
+  };
+
+  updateSheetRowByHeaderMap(sheet, targetRow, headerMap, updates);
+
+  return { success: true, message: 'Cập nhật công việc thành công trên Google Sheet.', data: task };
+}
+
+function updateTaskStatus(idCongViec, trangThai) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss ? ss.getSheetByName(SHEET_NAMES.CONG_VIEC) : null;
+  if (!sheet) return { success: false, message: 'Bảng CONG_VIEC không tồn tại.' };
+
+  var headerMap = getHeaderMap(sheet);
+  var idCol = headerMap['ID_CONG_VIEC'];
+  var statusCol = headerMap['TRANG_THAI'];
+  var doneCol = headerMap['NGAY_HOAN_THANH'];
+
+  if (idCol === undefined || statusCol === undefined) {
+    return { success: false, message: 'Cấu trúc bảng CONG_VIEC không đúng.' };
+  }
+
+  var data = sheet.getDataRange().getValues();
+  var targetId = String(idCongViec).trim();
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idCol]).trim() === targetId) {
+      sheet.getRange(i + 1, statusCol + 1).setValue(trangThai);
+      if (doneCol !== undefined) {
+        var doneStr = trangThai === 'Hoàn thành' ? Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss') : '';
+        sheet.getRange(i + 1, doneCol + 1).setValue(doneStr);
+      }
+      return {
+        success: true,
+        message: 'Đã cập nhật trạng thái công việc sang: ' + trangThai,
+        data: { idCongViec: idCongViec, trangThai: trangThai }
+      };
+    }
+  }
+
+  return { success: false, message: 'Không tìm thấy công việc: ' + idCongViec };
+}
+
+function deleteTask(idCongViec) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss ? ss.getSheetByName(SHEET_NAMES.CONG_VIEC) : null;
+  if (!sheet) return { success: false, message: 'Bảng CONG_VIEC không tồn tại.' };
+
+  var headerMap = getHeaderMap(sheet);
+  var idCol = headerMap['ID_CONG_VIEC'];
+  if (idCol === undefined) return { success: false, message: 'Cột ID_CONG_VIEC không tồn tại.' };
+
+  var data = sheet.getDataRange().getValues();
+  var targetId = String(idCongViec).trim();
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idCol]).trim() === targetId) {
+      sheet.deleteRow(i + 1);
+      return { success: true, message: 'Đã xóa công việc khỏi Google Sheet.' };
+    }
+  }
+
+  return { success: false, message: 'Không tìm thấy công việc: ' + idCongViec };
+}
+
+function saveCareEvent(evt) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss ? ss.getSheetByName(SHEET_NAMES.SU_KIEN_CHAM_SOC) : null;
+  if (!sheet) return { success: false, message: 'Bảng SU_KIEN_CHAM_SOC không tồn tại.' };
+
+  var headerMap = getHeaderMap(sheet);
+  var idCol = headerMap['ID_SU_KIEN'];
+  var data = sheet.getDataRange().getValues();
+
+  var idSuKien = evt.idSuKien;
+  if (idSuKien && idCol !== undefined) {
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][idCol]).trim() === String(idSuKien).trim()) {
+        updateSheetRowByHeaderMap(sheet, i + 1, headerMap, {
+          TEN_SU_KIEN: evt.tenSuKien,
+          NGAY: evt.ngay,
+          LOAI: evt.loai,
+          SO_NGAY_NHAC_TRUOC: evt.soNgayNhacTruoc,
+          TRANG_THAI: evt.trangThai
+        });
+        return { success: true, message: 'Cập nhật sự kiện thành công.', data: evt };
+      }
+    }
+  }
+
+  idSuKien = 'SK_' + Utilities.getUuid().slice(0, 6).toUpperCase();
+  var newRow = [];
+  for (var c = 0; c < sheet.getLastColumn(); c++) newRow.push('');
+
+  setCellByHeader(newRow, headerMap, 'ID_SU_KIEN', idSuKien);
+  setCellByHeader(newRow, headerMap, 'TEN_SU_KIEN', evt.tenSuKien || '');
+  setCellByHeader(newRow, headerMap, 'NGAY', evt.ngay || '');
+  setCellByHeader(newRow, headerMap, 'LOAI', evt.loai || 'NgayLe');
+  setCellByHeader(newRow, headerMap, 'SO_NGAY_NHAC_TRUOC', evt.soNgayNhacTruoc || 3);
+  setCellByHeader(newRow, headerMap, 'TRANG_THAI', evt.trangThai || 'Bật');
+
+  sheet.appendRow(newRow);
+  formatSingleRow(sheet, sheet.getLastRow());
+  evt.idSuKien = idSuKien;
+
+  return { success: true, message: 'Thêm sự kiện chăm sóc thành công.', data: evt };
+}
+
+function deleteCareEvent(idSuKien) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss ? ss.getSheetByName(SHEET_NAMES.SU_KIEN_CHAM_SOC) : null;
+  if (!sheet) return { success: false, message: 'Bảng SU_KIEN_CHAM_SOC không tồn tại.' };
+
+  var headerMap = getHeaderMap(sheet);
+  var idCol = headerMap['ID_SU_KIEN'];
+  if (idCol === undefined) return { success: false, message: 'Cột ID_SU_KIEN không tồn tại.' };
+
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idCol]).trim() === String(idSuKien).trim()) {
+      sheet.deleteRow(i + 1);
+      return { success: true, message: 'Đã xóa sự kiện chăm sóc khỏi Google Sheet.' };
+    }
+  }
+
+  return { success: false, message: 'Không tìm thấy sự kiện: ' + idSuKien };
+}
+
+function updateEmailConfig(cfg) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss ? ss.getSheetByName(SHEET_NAMES.EMAIL_CONFIG) : null;
+  if (!sheet) return { success: false, message: 'Bảng EMAIL_CONFIG không tồn tại.' };
+
+  var keysToUpdate = {
+    ADMIN_EMAIL: cfg.adminEmail,
+    EMAIL_FROM_NAME: cfg.emailFromName,
+    EMAIL_ENABLED: String(cfg.emailEnabled),
+    REMINDER_DAYS: cfg.reminderDays,
+    TEST_EMAIL: cfg.testEmail,
+    APP_URL: cfg.appUrl
+  };
+
+  var data = sheet.getDataRange().getValues();
+  var existingKeys = {};
+  for (var i = 1; i < data.length; i++) {
+    var k = String(data[i][0]).trim();
+    existingKeys[k] = i + 1;
+  }
+
+  Object.keys(keysToUpdate).forEach(function(k) {
+    var val = keysToUpdate[k];
+    if (val !== undefined) {
+      if (existingKeys[k]) {
+        sheet.getRange(existingKeys[k], 2).setValue(val);
+      } else {
+        sheet.appendRow([k, val, '']);
+      }
+    }
+  });
+
+  return { success: true, message: 'Đã cập nhật cấu hình email thành công trên Google Sheet.', data: cfg };
+}
+
+function getEmailLogs(statusFilter) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var logSheet = ss ? ss.getSheetByName(SHEET_NAMES.EMAIL_LOG) : null;
+  if (!logSheet) return { success: true, data: [] };
+
+  var rawLogs = sheetToObjects(logSheet).map(mapLogFromSheet);
+  if (statusFilter && statusFilter !== 'ALL') {
+    rawLogs = rawLogs.filter(function(l) { return l.trangThai === statusFilter; });
+  }
+
+  return { success: true, data: rawLogs };
+}
+
+function getInitialData(userEmail, userRole) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) return { success: false, message: 'Spreadsheet chưa được khởi tạo.' };
+
+  var khSheet = ss.getSheetByName(SHEET_NAMES.KHACH_HANG);
+  var lsgSheet = ss.getSheetByName(SHEET_NAMES.LICH_SU_GAP);
+  var cvSheet = ss.getSheetByName(SHEET_NAMES.CONG_VIEC);
+  var skSheet = ss.getSheetByName(SHEET_NAMES.SU_KIEN_CHAM_SOC);
+  var cbSheet = ss.getSheetByName(SHEET_NAMES.CAN_BO);
+  var logSheet = ss.getSheetByName(SHEET_NAMES.EMAIL_LOG);
+
+  var rawCustomers = khSheet ? sheetToObjects(khSheet) : [];
+  var rawMeetings = lsgSheet ? sheetToObjects(lsgSheet) : [];
+  var rawTasks = cvSheet ? sheetToObjects(cvSheet) : [];
+  var rawEvents = skSheet ? sheetToObjects(skSheet) : [];
+  var rawUsers = cbSheet ? sheetToObjects(cbSheet) : [];
+  var rawLogs = logSheet ? sheetToObjects(logSheet) : [];
+  var emailConfig = getEmailConfigMap();
+
+  var customers = rawCustomers.map(mapCustomerFromSheet);
+  var meetings = rawMeetings.map(mapMeetingFromSheet);
+  var tasks = rawTasks.map(mapTaskFromSheet);
+  var events = rawEvents.map(mapEventFromSheet);
+  var users = rawUsers.map(mapUserFromSheet);
+  var logs = rawLogs.map(mapLogFromSheet);
+
+  if (userRole === 'QHKH' && userEmail) {
+    var filteredKhIds = {};
+    customers = customers.filter(function(c) {
+      var match = (c.emailCanBo && c.emailCanBo.toLowerCase() === userEmail.toLowerCase()) ||
+                  (c.canBoPhuTrach && userEmail.toLowerCase().indexOf(c.canBoPhuTrach.toLowerCase()) !== -1);
+      if (match) filteredKhIds[c.idKh] = true;
+      return match;
+    });
+
+    meetings = meetings.filter(function(m) { return filteredKhIds[m.idKh]; });
+    tasks = tasks.filter(function(t) { return filteredKhIds[t.idKh]; });
+  }
+
+  return {
+    success: true,
+    message: 'Tải dữ liệu từ Google Sheets thành công.',
+    data: {
+      customers: customers,
+      meetings: meetings,
+      tasks: tasks,
+      careEvents: events,
+      users: users,
+      emailConfig: {
+        adminEmail: emailConfig.ADMIN_EMAIL || '',
+        emailFromName: emailConfig.EMAIL_FROM_NAME || 'Sổ Tay QHKH',
+        emailEnabled: emailConfig.EMAIL_ENABLED === 'true',
+        reminderDays: emailConfig.REMINDER_DAYS || '7,3,1',
+        testEmail: emailConfig.TEST_EMAIL || '',
+        appUrl: emailConfig.APP_URL || ''
+      },
+      emailLogs: logs
+    }
+  };
+}
+
+function syncAllToSheets(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) return { success: false, message: 'Spreadsheet không khả dụng.' };
+
+  var customers = payload.customers || [];
+  var meetings = payload.meetings || [];
+  var tasks = payload.tasks || [];
+  var careEvents = payload.careEvents || [];
+  var users = payload.users || [];
+  var emailConfig = payload.emailConfig || null;
+
+  var stats = {
+    customers: 0,
+    meetings: 0,
+    tasks: 0,
+    careEvents: 0,
+    users: 0
+  };
+
+  if (customers.length > 0) {
+    var khSheet = ss.getSheetByName(SHEET_NAMES.KHACH_HANG);
+    if (khSheet) {
+      customers.forEach(function(c) {
+        var res = updateCustomer(c);
+        if (!res.success) {
+          addCustomer(c);
+        }
+        stats.customers++;
+      });
+    }
+  }
+
+  if (meetings.length > 0) {
+    var lsgSheet = ss.getSheetByName(SHEET_NAMES.LICH_SU_GAP);
+    if (lsgSheet) {
+      meetings.forEach(function(m) {
+        var res = updateMeeting(m);
+        if (!res.success) {
+          recordMeeting(m);
+        }
+        stats.meetings++;
+      });
+    }
+  }
+
+  if (tasks.length > 0) {
+    var cvSheet = ss.getSheetByName(SHEET_NAMES.CONG_VIEC);
+    if (cvSheet) {
+      tasks.forEach(function(t) {
+        var res = updateTask(t);
+        if (!res.success) {
+          createTask(t);
+        }
+        stats.tasks++;
+      });
+    }
+  }
+
+  if (careEvents.length > 0) {
+    careEvents.forEach(function(e) {
+      saveCareEvent(e);
+      stats.careEvents++;
+    });
+  }
+
+  if (users.length > 0) {
+    users.forEach(function(u) {
+      var res = updateUser(u);
+      if (!res.success) {
+        addUser(u);
+      }
+      stats.users++;
+    });
+  }
+
+  if (emailConfig) {
+    updateEmailConfig(emailConfig);
+  }
+
+  formatAllSheetsPrettily(ss);
+
+  return {
+    success: true,
+    message: 'Đồng bộ toàn bộ dữ liệu lên Google Sheets thành công!',
+    data: stats
+  };
 }
 
 function getSystemHealth() {
@@ -295,9 +1435,9 @@ function getSystemHealth() {
     });
     if (missing.length === 0) {
       sheetOk = true;
-      sheetMsg = 'Tất cả 6 bảng dữ liệu Google Sheets hoạt động tốt.';
+      sheetMsg = 'Tất cả 7 bảng dữ liệu Google Sheets hoạt động tốt.';
     } else {
-      sheetMsg = 'Thiếu các bảng: ' + missing.join(', ') + '. Vui lòng chạy setupDatabase()!';
+      sheetMsg = 'Thiếu các bảng: ' + missing.join(', ') + '. Hãy chạy setupDatabase()!';
     }
   } else {
     sheetMsg = 'Không kết nối được Google Spreadsheet.';
@@ -343,7 +1483,7 @@ function getSystemHealth() {
       },
       trigger: {
         status: careTriggerExists ? 'OK' : 'WARNING',
-        details: careTriggerExists ? 'Trigger tự động hàng ngày (checkCareReminders) đang chạy.' : 'Chưa thiết lập trigger tự động. Hãy chạy setupTriggers()!',
+        details: careTriggerExists ? 'Trigger tự động hàng ngày (checkCareReminders) đang chạy.' : 'Chưa thiết lập trigger. Hãy chạy setupTriggers()!',
         activeTriggersCount: triggers.length
       },
       config: {
@@ -357,6 +1497,7 @@ function getSystemHealth() {
 function setupTriggers() {
   var triggers = ScriptApp.getProjectTriggers();
   var removedCount = 0;
+
   for (var i = 0; i < triggers.length; i++) {
     if (triggers[i].getHandlerFunction() === 'checkCareReminders') {
       ScriptApp.deleteTrigger(triggers[i]);
@@ -372,7 +1513,7 @@ function setupTriggers() {
 
   return {
     success: true,
-    message: 'Đã thiết lập Trigger tự động chạy lúc 07:00 hàng ngày (đã dọn ' + removedCount + ' trigger cũ).'
+    message: 'Đã thiết lập Trigger tự động thành công! Đã dọn dẹp ' + removedCount + ' trigger cũ và tạo 1 trigger chạy lúc 07:00 AM hàng ngày.'
   };
 }
 
@@ -392,8 +1533,8 @@ function checkCareReminders() {
   var logSheet = ss.getSheetByName(SHEET_NAMES.EMAIL_LOG);
   var config = getEmailConfigMap();
 
-  if (!khSheet || !skSheet || !logSheet) return { error: 'Thiếu sheet cần thiết.' };
-  if (config.EMAIL_ENABLED !== 'true') return { message: 'Gửi email đang Tắt (EMAIL_ENABLED=false).' };
+  if (!khSheet || !skSheet || !logSheet) return { error: 'Thiếu bảng dữ liệu cần thiết.' };
+  if (config.EMAIL_ENABLED !== 'true') return { message: 'Chức năng gửi email đang Tắt (EMAIL_ENABLED=false).' };
 
   var customers = sheetToObjects(khSheet);
   var events = sheetToObjects(skSheet);
@@ -413,11 +1554,8 @@ function checkCareReminders() {
 
   var today = new Date();
   var todayYear = today.getFullYear();
-
   var sendCount = 0;
   var skipCount = 0;
-  var failCount = 0;
-  var processedDetails = [];
 
   var activeCustomers = customers.filter(function(c) {
     return String(c.CHE_DO_CHAM_SOC).trim() === 'Bật';
@@ -437,134 +1575,98 @@ function checkCareReminders() {
 
           if (sentCache[cacheKey]) {
             skipCount++;
-            processedDetails.push({ customer: cust.HO_TEN, event: 'Sinh nhật', days: daysUntil, status: 'SKIPPED' });
           } else {
-            var sentRes = sendCareReminderEmail(cust, 'Sinh nhật', eventDateStr, daysUntil, recipientEmail, config, logSheet);
-            if (sentRes.success) {
-              sentCache[cacheKey] = true;
+            var sentOk = sendReminderEmail({
+              cust: cust,
+              tenSuKien: 'Sinh nhật khách hàng',
+              ngaySuKien: eventDateStr,
+              soNgayTruoc: daysUntil,
+              recipientEmail: recipientEmail,
+              config: config,
+              logSheet: logSheet
+            });
+            if (sentOk.success) {
               sendCount++;
-            } else {
-              failCount++;
+              sentCache[cacheKey] = true;
             }
-            processedDetails.push({ customer: cust.HO_TEN, event: 'Sinh nhật', days: daysUntil, status: sentRes.success ? 'SENT' : 'FAILED', error: sentRes.error });
           }
         }
       }
     }
-
-    events.forEach(function(evt) {
-      if (String(evt.TRANG_THAI).trim() !== 'Bật') return;
-      if (evt.LOAI === 'SinhNhat') return;
-
-      var evtDate = parseFixedDayMonth(evt.NGAY);
-      if (evtDate) {
-        var daysUntil = getDaysUntilNextAnniversary(evtDate.day, evtDate.month, today);
-        var noticeDays = parseInt(evt.SO_NGAY_NHAC_TRUOC, 10) || 3;
-        var eligibleDays = [noticeDays, 1, 0];
-        if (eligibleDays.indexOf(daysUntil) !== -1) {
-          var eventDateStr = pad2(evtDate.day) + '/' + pad2(evtDate.month) + '/' + todayYear;
-          var cacheKey = cust.ID_KH + '|' + evt.TEN_SU_KIEN + '|' + eventDateStr + '|' + daysUntil;
-
-          if (sentCache[cacheKey]) {
-            skipCount++;
-            processedDetails.push({ customer: cust.HO_TEN, event: evt.TEN_SU_KIEN, days: daysUntil, status: 'SKIPPED' });
-          } else {
-            var sentRes = sendCareReminderEmail(cust, evt.TEN_SU_KIEN, eventDateStr, daysUntil, recipientEmail, config, logSheet);
-            if (sentRes.success) {
-              sentCache[cacheKey] = true;
-              sendCount++;
-            } else {
-              failCount++;
-            }
-            processedDetails.push({ customer: cust.HO_TEN, event: evt.TEN_SU_KIEN, days: daysUntil, status: sentRes.success ? 'SENT' : 'FAILED', error: sentRes.error });
-          }
-        }
-      }
-    });
   });
 
-  return {
-    totalChecked: activeCustomers.length,
-    sent: sendCount,
-    skipped: skipCount,
-    failed: failCount,
-    details: processedDetails
-  };
+  return { checked: activeCustomers.length, sent: sendCount, skipped: skipCount };
 }
 
-function sendCareReminderEmail(cust, tenSuKien, ngaySuKien, soNgayTruoc, recipientEmail, config, logSheet) {
+function sendReminderEmail(opts) {
+  var cust = opts.cust;
+  var tenSuKien = opts.tenSuKien;
+  var ngaySuKien = opts.ngaySuKien;
+  var soNgayTruoc = opts.soNgayTruoc;
+  var recipientEmail = opts.recipientEmail;
+  var config = opts.config;
+  var logSheet = opts.logSheet;
+
   var logId = 'LOG_' + Utilities.getUuid().slice(0, 8);
   var now = new Date();
   var timestamp = Utilities.formatDate(now, 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
-  var dayLabel = soNgayTruoc === 0 ? 'HÔM NAY' : (soNgayTruoc + ' ngày tới');
-  var subject = '[CRM CARE] Nhắc chăm sóc khách hàng – ' + tenSuKien + ' (' + dayLabel + ')';
 
-  var appUrl = config.APP_URL || 'https://crm-pocket-bank.web.app';
-  var customerProfileUrl = appUrl + '?customerId=' + encodeURIComponent(cust.ID_KH);
-  var mapUrl = cust.GOOGLE_MAP_URL || ('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(cust.DIA_CHI || cust.HO_TEN));
-
-  var body = 
-    'Kính gửi Cán bộ QHKH,\\n\\n' +
-    'Khách hàng:\\n' +
-    'Họ tên: ' + cust.HO_TEN + '\\n' +
-    'SĐT: ' + cust.SDT + '\\n' +
-    'Phân loại: ' + cust.PHAN_LOAI + '\\n' +
-    'Ngày sinh: ' + cust.NGAY_SINH + '\\n' +
-    'Địa chỉ: ' + cust.DIA_CHI + '\\n' +
-    'Ngành nghề: ' + cust.NGANH_NGHE + '\\n' +
-    'Nhu cầu: ' + (cust.NHU_CAU || 'Chưa ghi nhận') + '\\n\\n' +
-    'Sự kiện: ' + tenSuKien + '\\n' +
-    'Ngày: ' + ngaySuKien + ' (' + dayLabel + ')\\n\\n' +
-    'Đề nghị cán bộ thực hiện chăm sóc khách hàng.\\n\\n' +
-    'Link Google Maps: ' + mapUrl + '\\n' +
-    'Link mở hồ sơ khách hàng: ' + customerProfileUrl + '\\n\\n' +
-    'Trân trọng,\\nSổ Tay QHKH';
+  var subject = '[NHẮC CHĂM SÓC KH] ' + cust.HO_TEN + ' - ' + tenSuKien + ' (còn ' + soNgayTruoc + ' ngày)';
+  var body = 'Kính gửi Cán bộ QHKH: ' + (cust.CAN_BO_PHU_TRACH || '') + ',\n\n' +
+    'Khách hàng ' + cust.HO_TEN + ' sắp tới ' + tenSuKien + ' vào ngày ' + ngaySuKien + ' (còn ' + soNgayTruoc + ' ngày).\n' +
+    'SĐT: ' + cust.SDT + '\nĐịa chỉ: ' + (cust.DIA_CHI || 'Chưa có') + '\n\n' +
+    'Đề nghị cán bộ chủ động liên hệ chăm sóc.\nTrân trọng,\nVietinBank Chi nhánh Ninh Bình';
 
   try {
     MailApp.sendEmail({
       to: recipientEmail,
       subject: subject,
       body: body,
-      name: config.EMAIL_FROM_NAME || 'Sổ Tay QHKH'
+      name: config.EMAIL_FROM_NAME || 'VietinBank Ninh Bình'
     });
 
     logSheet.appendRow([
       logId, timestamp, cust.ID_KH, cust.HO_TEN, recipientEmail,
       tenSuKien, ngaySuKien, soNgayTruoc, timestamp, 'SENT', '', ''
     ]);
+    formatSingleRow(logSheet, logSheet.getLastRow());
+
     return { success: true };
   } catch (err) {
-    var errorMsg = err.toString();
     logSheet.appendRow([
       logId, timestamp, cust.ID_KH, cust.HO_TEN, recipientEmail,
-      tenSuKien, ngaySuKien, soNgayTruoc, '', 'FAILED', errorMsg, ''
+      tenSuKien, ngaySuKien, soNgayTruoc, '', 'FAILED', err.toString(), ''
     ]);
-    return { success: false, error: errorMsg };
+    formatSingleRow(logSheet, logSheet.getLastRow());
+    return { success: false, error: err.toString() };
   }
 }
 
 function sendTestEmail(targetEmail) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var logSheet = ss.getSheetByName(SHEET_NAMES.EMAIL_LOG);
+  var logSheet = ss ? ss.getSheetByName(SHEET_NAMES.EMAIL_LOG) : null;
   var config = getEmailConfigMap();
 
   var recipient = targetEmail || config.TEST_EMAIL || config.ADMIN_EMAIL || Session.getActiveUser().getEmail();
   if (!recipient || recipient.indexOf('@') === -1) {
-    return { success: false, message: 'Địa chỉ email người nhận không hợp lệ: ' + recipient, error: 'INVALID_EMAIL' };
+    return { success: false, message: 'Địa chỉ email người nhận không hợp lệ: ' + recipient };
   }
 
   var logId = 'TEST_' + Utilities.getUuid().slice(0, 8);
   var now = new Date();
   var timestamp = Utilities.formatDate(now, 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
-  var subject = '[CRM CARE TEST] Kiểm Tra Hệ Thống Gửi Email - ' + timestamp;
-  var body = 'Kính gửi Quản trị viên,\\n\\nApps Script đã thực thi sendEmail() thành công.\\nThời gian: ' + timestamp;
+  var subject = '[VIETINBANK CRM TEST] Kiểm Tra Kết Nối Gửi Email - ' + timestamp;
+  var body = 'Kính gửi Quản trị viên,\n\n' +
+    'Đây là email kiểm tra chức năng từ Google Apps Script Backend của Sổ Tay QHKH VietinBank Ninh Bình.\n' +
+    'Thời gian thực thi: ' + timestamp + '\n\n' +
+    'Trân trọng,\nVietinBank Ninh Bình CRM';
 
   try {
     MailApp.sendEmail({
       to: recipient,
       subject: subject,
       body: body,
-      name: config.EMAIL_FROM_NAME || 'Sổ Tay QHKH'
+      name: config.EMAIL_FROM_NAME || 'VietinBank Ninh Bình'
     });
 
     if (logSheet) {
@@ -573,365 +1675,58 @@ function sendTestEmail(targetEmail) {
         'TEST_EMAIL', Utilities.formatDate(now, 'GMT+7', 'dd/MM/yyyy'), 0,
         timestamp, 'SENT', 'Gửi email test thành công qua MailApp.', ''
       ]);
+      formatSingleRow(logSheet, logSheet.getLastRow());
     }
 
     return {
       success: true,
-      message: 'Apps Script đã thực thi gửi email test thành công đến ' + recipient + '!',
-      data: { recipient: recipient, logId: logId, timestamp: timestamp }
+      message: 'Apps Script đã gửi email test thành công đến: ' + recipient + '!'
     };
   } catch (err) {
-    var errorMsg = err.toString();
-    if (logSheet) {
-      logSheet.appendRow([
-        logId, timestamp, 'SYSTEM_TEST', 'Kiểm tra hệ thống', recipient,
-        'TEST_EMAIL', Utilities.formatDate(now, 'GMT+7', 'dd/MM/yyyy'), 0,
-        '', 'FAILED', errorMsg, ''
-      ]);
-    }
-    return { success: false, message: 'Không gửi được email. Lỗi: ' + errorMsg, error: errorMsg };
+    return { success: false, message: 'Lỗi gửi email: ' + err.toString() };
   }
 }
 
-function getInitialData(userEmail, userRole) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (!ss) return { success: false, message: 'Spreadsheet chưa mở.' };
-
-  var khSheet = ss.getSheetByName(SHEET_NAMES.KHACH_HANG);
-  var lsgSheet = ss.getSheetByName(SHEET_NAMES.LICH_SU_GAP);
-  var cvSheet = ss.getSheetByName(SHEET_NAMES.CONG_VIEC);
-  var skSheet = ss.getSheetByName(SHEET_NAMES.SU_KIEN_CHAM_SOC);
-  var logSheet = ss.getSheetByName(SHEET_NAMES.EMAIL_LOG);
-  var emailConfig = getEmailConfigMap();
-
-  var customers = (khSheet ? sheetToObjects(khSheet) : []).map(mapCustomerFromSheet);
-  var meetings = (lsgSheet ? sheetToObjects(lsgSheet) : []).map(mapMeetingFromSheet);
-  var tasks = (cvSheet ? sheetToObjects(cvSheet) : []).map(mapTaskFromSheet);
-  var events = (skSheet ? sheetToObjects(skSheet) : []).map(mapEventFromSheet);
-  var logs = (logSheet ? sheetToObjects(logSheet) : []).map(mapLogFromSheet);
-
-  return {
-    success: true,
-    data: {
-      customers: customers,
-      meetings: meetings,
-      tasks: tasks,
-      careEvents: events,
-      emailConfig: {
-        adminEmail: emailConfig.ADMIN_EMAIL || '',
-        emailFromName: emailConfig.EMAIL_FROM_NAME || 'Sổ Tay QHKH',
-        emailEnabled: emailConfig.EMAIL_ENABLED === 'true',
-        reminderDays: emailConfig.REMINDER_DAYS || '7,3,1',
-        testEmail: emailConfig.TEST_EMAIL || '',
-        appUrl: emailConfig.APP_URL || ''
-      },
-      emailLogs: logs
-    }
-  };
+function getHeaderMap(sheet) {
+  var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var map = {};
+  for (var c = 0; c < headerRow.length; c++) {
+    var key = String(headerRow[c]).trim();
+    if (key) map[key] = c;
+  }
+  return map;
 }
 
-function addCustomer(cust) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(SHEET_NAMES.KHACH_HANG);
-  if (!sheet) return { success: false, message: 'Bảng KHACH_HANG không tồn tại.' };
-
-  var rawPhone = String(cust.sdt || '');
-  var cleanPhone = rawPhone.replace(/\D/g, '');
-  if (cleanPhone.indexOf('84') === 0 && cleanPhone.length >= 10) {
-    cleanPhone = '0' + cleanPhone.slice(2);
+function setCellByHeader(rowArr, headerMap, colName, val) {
+  var col = headerMap[colName];
+  if (col !== undefined && col < rowArr.length) {
+    rowArr[col] = val !== undefined && val !== null ? val : '';
   }
-  var idKh = cleanPhone || cust.idKh || ('KH_' + Utilities.getUuid().slice(0, 8).toUpperCase());
-
-  // Kiểm tra khách hàng trùng số điện thoại
-  var allKh = sheetToObjects(sheet);
-  for (var k = 0; k < allKh.length; k++) {
-    var r = allKh[k];
-    var rPhone = String(r.SDT || '').replace(/\D/g, '');
-    if (rPhone.indexOf('84') === 0 && rPhone.length >= 10) rPhone = '0' + rPhone.slice(2);
-    if ((cleanPhone && rPhone === cleanPhone) || String(r.ID_KH).trim() === idKh) {
-      if (!cust.allowUpdateExisting && !cust.forceUpdate) {
-        return {
-          success: false,
-          duplicate: true,
-          existingCustomer: mapCustomerFromSheet(r),
-          message: 'Khách hàng có số điện thoại "' + rawPhone + '" đã tồn tại, đang được quản lý bởi cán bộ ' + (r.CAN_BO_PHU_TRACH || 'khác') + ' (@' + (r.USER_CAN_BO || '') + '). Bạn có thể xem và cập nhật hồ sơ khách hàng này.'
-        };
-      } else {
-        cust.idKh = r.ID_KH;
-        return updateCustomer(cust);
-      }
-    }
-  }
-
-  var nowStr = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
-  var userKhoiTao = cust.userKhoiTao || cust.userCanBo || '';
-  var nguoiKhoiTao = cust.nguoiKhoiTao || cust.canBoPhuTrach || '';
-  var phongBanKhoiTao = cust.phongBanKhoiTao || '';
-
-  var row = [
-    idKh, cust.hoTen || '', cust.loaiKhachHang || 'Cá nhân', cust.tenCongTy || '', cust.chucVu || '', cleanPhone || rawPhone, cust.ngaySinh || '', cust.diaChi || '',
-    cust.latitude || '', cust.longitude || '', cust.googleMapUrl || '',
-    cust.nganhNghe || '', cust.nhuCau || '', cust.ghiChu || '',
-    cust.phanLoai || 'Đang tiếp thị', cust.cheDoChamSoc || 'Tắt',
-    cust.canBoPhuTrach || '', cust.userCanBo || '', cust.emailCanBo || '',
-    nguoiKhoiTao, userKhoiTao, phongBanKhoiTao,
-    cust.nguoiCapNhatCuoi || nguoiKhoiTao, cust.userCapNhatCuoi || userKhoiTao,
-    nowStr, nowStr, cust.trangThai || 'Hoạt động'
-  ];
-
-  sheet.appendRow(row);
-  cust.idKh = idKh;
-  cust.nguoiKhoiTao = nguoiKhoiTao;
-  cust.userKhoiTao = userKhoiTao;
-  cust.phongBanKhoiTao = phongBanKhoiTao;
-  cust.ngayTao = nowStr;
-  cust.ngayCapNhat = nowStr;
-
-  return { success: true, message: 'Thêm khách hàng thành công.', data: cust };
 }
 
-function updateCustomer(cust) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(SHEET_NAMES.KHACH_HANG);
-  if (!sheet) return { success: false, message: 'Bảng KHACH_HANG không tồn tại.' };
-
-  var data = sheet.getDataRange().getValues();
-  var headers = data[0];
-  var rowIndex = -1;
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]).trim() === String(cust.idKh).trim()) {
-      rowIndex = i + 1;
-      break;
-    }
-  }
-
-  if (rowIndex === -1) return { success: false, message: 'Không tìm thấy khách hàng.' };
-
-  var nowStr = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
-
-  var fields = {
-    'HO_TEN': cust.hoTen,
-    'LOAI_KHACH_HANG': cust.loaiKhachHang,
-    'TEN_CONG_TY': cust.tenCongTy,
-    'CHUC_VU': cust.chucVu,
-    'SDT': cust.sdt,
-    'NGAY_SINH': cust.ngaySinh,
-    'DIA_CHI': cust.diaChi,
-    'LATITUDE': cust.latitude,
-    'LONGITUDE': cust.longitude,
-    'GOOGLE_MAP_URL': cust.googleMapUrl,
-    'NGANH_NGHE': cust.nganhNghe,
-    'NHU_CAU': cust.nhuCau,
-    'GHI_CHU': cust.ghiChu,
-    'PHAN_LOAI': cust.phanLoai,
-    'CHE_DO_CHAM_SOC': cust.cheDoChamSoc,
-    'CAN_BO_PHU_TRACH': cust.canBoPhuTrach,
-    'USER_CAN_BO': cust.userCanBo,
-    'EMAIL_CAN_BO': cust.emailCanBo,
-    'NGUOI_KHOI_TAO': cust.nguoiKhoiTao,
-    'USER_KHOI_TAO': cust.userKhoiTao,
-    'PHONG_BAN_KHOI_TAO': cust.phongBanKhoiTao,
-    'NGUOI_CAP_NHAT_CUOI': cust.nguoiCapNhatCuoi,
-    'USER_CAP_NHAT_CUOI': cust.userCapNhatCuoi,
-    'NGAY_CAP_NHAT': nowStr,
-    'TRANG_THAI': cust.trangThai
-  };
-
-  for (var k in fields) {
-    if (fields[k] !== undefined) {
-      var colIdx = headers.indexOf(k);
-      if (colIdx !== -1) {
-        sheet.getRange(rowIndex, colIdx + 1).setValue(fields[k]);
-      }
-    }
-  }
-
-  return { success: true, message: 'Cập nhật thông tin khách hàng thành công.', data: cust };
-}
-
-function toggleCareMode(idKh, mode) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(SHEET_NAMES.KHACH_HANG);
-  if (!sheet) return { success: false, message: 'Bảng KHACH_HANG không tồn tại.' };
-
-  var data = sheet.getDataRange().getValues();
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]).trim() === String(idKh).trim()) {
-      var targetMode = (mode === 'Bật' || mode === 'Tắt') ? mode : (data[i][12] === 'Bật' ? 'Tắt' : 'Bật');
-      sheet.getRange(i + 1, 13).setValue(targetMode);
-      var nowStr = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
-      sheet.getRange(i + 1, 17).setValue(nowStr);
-      return { success: true, message: 'Đã cập nhật Chế độ chăm sóc: ' + targetMode, data: { idKh: idKh, cheDoChamSoc: targetMode } };
-    }
-  }
-  return { success: false, message: 'Không tìm thấy khách hàng.' };
-}
-
-function recordMeeting(meeting, newTask) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var lsgSheet = ss.getSheetByName(SHEET_NAMES.LICH_SU_GAP);
-  var khSheet = ss.getSheetByName(SHEET_NAMES.KHACH_HANG);
-  var cvSheet = ss.getSheetByName(SHEET_NAMES.CONG_VIEC);
-
-  if (!lsgSheet || !khSheet) return { success: false, message: 'Bảng cuộc gặp không tồn tại.' };
-
-  var idLichSu = 'LS_' + Utilities.getUuid().slice(0, 8).toUpperCase();
-  var nowStr = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
-
-  var meetingRow = [
-    idLichSu, meeting.idKh, meeting.thoiGianGap || nowStr, meeting.hinhThucGap || 'Gặp trực tiếp',
-    meeting.latitude || '', meeting.longitude || '', meeting.googleMapUrl || '',
-    meeting.noiDungTraoDoi || '', meeting.nhuCauKhachHang || '', meeting.tinhTrangSauGap || 'Đã gặp khách hàng',
-    meeting.congViecTiepTheo || '', meeting.ngayHenLienHe || '', meeting.ghiChu || '',
-    meeting.canBoThucHien || '', nowStr
-  ];
-
-  lsgSheet.appendRow(meetingRow);
-
-  var khData = khSheet.getDataRange().getValues();
-  for (var i = 1; i < khData.length; i++) {
-    if (String(khData[i][0]).trim() === String(meeting.idKh).trim()) {
-      khSheet.getRange(i + 1, 17).setValue(nowStr);
-      if (meeting.nhuCauKhachHang) khSheet.getRange(i + 1, 10).setValue(meeting.nhuCauKhachHang);
-      break;
-    }
-  }
-
-  var createdTaskData = null;
-  if (newTask && newTask.noiDung && cvSheet) {
-    var idCv = 'CV_' + Utilities.getUuid().slice(0, 8).toUpperCase();
-    var taskRow = [
-      idCv, meeting.idKh, newTask.noiDung, newTask.ngayHan || '',
-      meeting.canBoThucHien || '', 'Chưa thực hiện', nowStr, '', newTask.ghiChu || ''
-    ];
-    cvSheet.appendRow(taskRow);
-    createdTaskData = {
-      idCongViec: idCv, idKh: meeting.idKh, noiDung: newTask.noiDung,
-      ngayHan: newTask.ngayHan, canBo: meeting.canBoThucHien, trangThai: 'Chưa thực hiện'
-    };
-  }
-
-  meeting.idLichSu = idLichSu;
-  meeting.thoiGianCapNhat = nowStr;
-
-  return { success: true, message: 'Đã cập nhật thành công.', data: { meeting: meeting, task: createdTaskData } };
-}
-
-function createTask(task) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var cvSheet = ss.getSheetByName(SHEET_NAMES.CONG_VIEC);
-  if (!cvSheet) return { success: false, message: 'Bảng CONG_VIEC không tồn tại.' };
-
-  var idCv = 'CV_' + Utilities.getUuid().slice(0, 8).toUpperCase();
-  var nowStr = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
-  cvSheet.appendRow([idCv, task.idKh || '', task.noiDung || '', task.ngayHan || '', task.canBo || '', task.trangThai || 'Chưa thực hiện', nowStr, '', task.ghiChu || '']);
-  task.idCongViec = idCv;
-  task.ngayTao = nowStr;
-  return { success: true, message: 'Tạo công việc thành công.', data: task };
-}
-
-function updateTaskStatus(idCongViec, trangThai) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var cvSheet = ss.getSheetByName(SHEET_NAMES.CONG_VIEC);
-  if (!cvSheet) return { success: false, message: 'Bảng CONG_VIEC không tồn tại.' };
-
-  var data = cvSheet.getDataRange().getValues();
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]).trim() === String(idCongViec).trim()) {
-      cvSheet.getRange(i + 1, 6).setValue(trangThai);
-      if (trangThai === 'Hoàn thành') {
-        var nowStr = Utilities.formatDate(new Date(), 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
-        cvSheet.getRange(i + 1, 8).setValue(nowStr);
-      }
-      return { success: true, message: 'Cập nhật công việc thành công.', data: { idCongViec: idCongViec, trangThai: trangThai } };
-    }
-  }
-  return { success: false, message: 'Không tìm thấy công việc.' };
-}
-
-function saveCareEvent(evt) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(SHEET_NAMES.SU_KIEN_CHAM_SOC);
-  if (!sheet) return { success: false, message: 'Bảng SU_KIEN_CHAM_SOC không tồn tại.' };
-
-  var data = sheet.getDataRange().getValues();
-  var idSuKien = evt.idSuKien;
-
-  if (idSuKien) {
-    for (var i = 1; i < data.length; i++) {
-      if (String(data[i][0]).trim() === String(idSuKien).trim()) {
-        sheet.getRange(i + 1, 2).setValue(evt.tenSuKien);
-        sheet.getRange(i + 1, 3).setValue(evt.ngay);
-        sheet.getRange(i + 1, 4).setValue(evt.loai);
-        sheet.getRange(i + 1, 5).setValue(evt.soNgayNhacTruoc);
-        sheet.getRange(i + 1, 6).setValue(evt.trangThai);
-        return { success: true, message: 'Cập nhật sự kiện thành công.', data: evt };
-      }
-    }
-  }
-
-  idSuKien = 'SK_' + Utilities.getUuid().slice(0, 6).toUpperCase();
-  sheet.appendRow([idSuKien, evt.tenSuKien || '', evt.ngay || '', evt.loai || 'NgayLe', evt.soNgayNhacTruoc || 3, evt.trangThai || 'Bật']);
-  evt.idSuKien = idSuKien;
-  return { success: true, message: 'Thêm sự kiện chăm sóc thành công.', data: evt };
-}
-
-function deleteCareEvent(idSuKien) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(SHEET_NAMES.SU_KIEN_CHAM_SOC);
-  if (!sheet) return { success: false, message: 'Bảng không tồn tại.' };
-
-  var data = sheet.getDataRange().getValues();
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][0]).trim() === String(idSuKien).trim()) {
-      sheet.deleteRow(i + 1);
-      return { success: true, message: 'Đã xóa sự kiện chăm sóc.' };
-    }
-  }
-  return { success: false, message: 'Không tìm thấy sự kiện.' };
-}
-
-function updateEmailConfig(cfg) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(SHEET_NAMES.EMAIL_CONFIG);
-  if (!sheet) return { success: false, message: 'Bảng EMAIL_CONFIG không tồn tại.' };
-
-  var keysToUpdate = {
-    ADMIN_EMAIL: cfg.adminEmail,
-    EMAIL_FROM_NAME: cfg.emailFromName,
-    EMAIL_ENABLED: String(cfg.emailEnabled),
-    REMINDER_DAYS: cfg.reminderDays,
-    TEST_EMAIL: cfg.testEmail,
-    APP_URL: cfg.appUrl
-  };
-
-  var data = sheet.getDataRange().getValues();
-  var existingKeys = {};
-  for (var i = 1; i < data.length; i++) {
-    existingKeys[String(data[i][0]).trim()] = i + 1;
-  }
-
-  Object.keys(keysToUpdate).forEach(function(k) {
-    var val = keysToUpdate[k];
-    if (val !== undefined) {
-      if (existingKeys[k]) sheet.getRange(existingKeys[k], 2).setValue(val);
-      else sheet.appendRow([k, val]);
+function updateSheetRowByHeaderMap(sheet, rowIndex, headerMap, updates) {
+  Object.keys(updates).forEach(function(k) {
+    var val = updates[k];
+    if (val !== undefined && headerMap[k] !== undefined) {
+      var colIdx = headerMap[k] + 1;
+      sheet.getRange(rowIndex, colIdx).setValue(val !== null ? val : '');
     }
   });
-
-  return { success: true, message: 'Cập nhật cấu hình email thành công.', data: cfg };
 }
 
-function getEmailLogs(statusFilter) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var logSheet = ss.getSheetByName(SHEET_NAMES.EMAIL_LOG);
-  if (!logSheet) return { success: true, data: [] };
-
-  var logs = sheetToObjects(logSheet).map(mapLogFromSheet);
-  if (statusFilter && statusFilter !== 'ALL') {
-    logs = logs.filter(function(l) { return l.trangThai === statusFilter; });
-  }
-  return { success: true, data: logs };
+function formatSingleRow(sheet, rowIdx) {
+  try {
+    var lastCol = sheet.getLastColumn();
+    sheet.setRowHeight(rowIdx, 28);
+    var range = sheet.getRange(rowIdx, 1, 1, lastCol);
+    range.setFontSize(10).setVerticalAlignment('middle');
+    if (rowIdx % 2 === 1) {
+      range.setBackground(BRAND_COLORS.ZEBRA_BG);
+    } else {
+      range.setBackground('#FFFFFF');
+    }
+    range.setBorder(true, true, true, true, true, true, BRAND_COLORS.BORDER, SpreadsheetApp.BorderStyle.SOLID);
+  } catch (e) {}
 }
 
 function getEmailConfigMap() {
@@ -953,8 +1748,10 @@ function sheetToObjects(sheet) {
   if (!sheet) return [];
   var data = sheet.getDataRange().getValues();
   if (data.length < 2) return [];
+
   var headers = data[0].map(function(h) { return String(h).trim(); });
   var rows = [];
+
   for (var r = 1; r < data.length; r++) {
     var rowObj = {};
     var hasVal = false;
@@ -964,7 +1761,7 @@ function sheetToObjects(sheet) {
         val = Utilities.formatDate(val, 'GMT+7', 'yyyy-MM-dd HH:mm:ss');
       }
       rowObj[headers[c]] = val;
-      if (val !== '') hasVal = true;
+      if (val !== '' && val !== null && val !== undefined) hasVal = true;
     }
     if (hasVal) rows.push(rowObj);
   }
@@ -972,6 +1769,11 @@ function sheetToObjects(sheet) {
 }
 
 function mapCustomerFromSheet(r) {
+  var eventsArr = [];
+  if (r.SU_KIEN_CHAM_SOC) {
+    eventsArr = String(r.SU_KIEN_CHAM_SOC).split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+  }
+
   return {
     idKh: String(r.ID_KH || ''),
     hoTen: String(r.HO_TEN || ''),
@@ -989,11 +1791,12 @@ function mapCustomerFromSheet(r) {
     ghiChu: String(r.GHI_CHU || ''),
     phanLoai: r.PHAN_LOAI || 'Đang tiếp thị',
     cheDoChamSoc: r.CHE_DO_CHAM_SOC || 'Tắt',
+    suKienChamSoc: eventsArr,
     canBoPhuTrach: String(r.CAN_BO_PHU_TRACH || ''),
-    userCanBo: String(r.USER_CAN_BO || r.CAN_BO_PHU_TRACH || ''),
+    userCanBo: String(r.USER_CAN_BO || ''),
     emailCanBo: String(r.EMAIL_CAN_BO || ''),
-    nguoiKhoiTao: String(r.NGUOI_KHOI_TAO || r.CAN_BO_PHU_TRACH || ''),
-    userKhoiTao: String(r.USER_KHOI_TAO || r.USER_CAN_BO || ''),
+    nguoiKhoiTao: String(r.NGUOI_KHOI_TAO || ''),
+    userKhoiTao: String(r.USER_KHOI_TAO || ''),
     phongBanKhoiTao: String(r.PHONG_BAN_KHOI_TAO || ''),
     nguoiCapNhatCuoi: String(r.NGUOI_CAP_NHAT_CUOI || ''),
     userCapNhatCuoi: String(r.USER_CAP_NHAT_CUOI || ''),
@@ -1048,6 +1851,23 @@ function mapEventFromSheet(r) {
   };
 }
 
+function mapUserFromSheet(r) {
+  return {
+    stt: parseInt(r.STT, 10) || 0,
+    maNv: String(r.MA_NV || ''),
+    hoTen: String(r.HO_TEN || ''),
+    user: String(r.USER || ''),
+    password: String(r.PASSWORD || ''),
+    phongBan: String(r.PHONG_BAN || ''),
+    viTri: String(r.VI_TRI || ''),
+    sdt: String(r.SDT || ''),
+    email: String(r.EMAIL || ''),
+    role: r.ROLE || 'QHKH',
+    isLeader: String(r.IS_LEADER) === 'true',
+    trangThai: r.TRANG_THAI || 'Hoạt động'
+  };
+}
+
 function mapLogFromSheet(r) {
   return {
     idLog: String(r.ID_LOG || ''),
@@ -1065,174 +1885,16 @@ function mapLogFromSheet(r) {
   };
 }
 
-function mapUserFromSheet(r) {
-  return {
-    stt: parseInt(r.STT, 10) || 0,
-    hoTen: String(r.HO_TEN || ''),
-    maNv: String(r.MA_NV || ''),
-    user: String(r.USER || ''),
-    password: String(r.PASSWORD || ''),
-    phongBan: String(r.PHONG_BAN || ''),
-    viTri: String(r.VI_TRI || ''),
-    sdt: String(r.SDT || ''),
-    email: String(r.EMAIL || ''),
-    role: r.ROLE || 'QHKH',
-    isLeader: String(r.IS_LEADER).toLowerCase() === 'true',
-    trangThai: r.TRANG_THAI || 'Hoạt động'
-  };
-}
-
-function loginUser(username, password) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(SHEET_NAMES.CAN_BO);
-  if (!sheet) return { success: false, message: 'Sheet CAN_BO chưa được tạo.' };
-
-  var users = sheetToObjects(sheet).map(mapUserFromSheet);
-  var u = String(username || '').trim().toLowerCase();
-  var p = String(password || '').trim();
-
-  var found = users.find(function(item) {
-    return item.user.toLowerCase() === u;
-  });
-
-  if (!found) {
-    return { success: false, message: 'Tài khoản không tồn tại trong hệ thống.' };
-  }
-
-  var expectedPass = found.password || (found.user === 'admin' ? 'admin123' : '123');
-  if (p !== expectedPass) {
-    return { success: false, message: 'Mật khẩu không chính xác.' };
-  }
-
-  // Remove password from response
-  var safeUser = Object.assign({}, found);
-  delete safeUser.password;
-
-  return {
-    success: true,
-    message: 'Đăng nhập thành công! Xin chào ' + found.hoTen,
-    data: safeUser
-  };
-}
-
-function getUsers() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(SHEET_NAMES.CAN_BO);
-  if (!sheet) return { success: false, message: 'Sheet CAN_BO chưa tồn tại.' };
-
-  var users = sheetToObjects(sheet).map(mapUserFromSheet);
-  return { success: true, data: users };
-}
-
-function updateUser(userData) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(SHEET_NAMES.CAN_BO);
-  if (!sheet) return { success: false, message: 'Sheet CAN_BO chưa tồn tại.' };
-
-  var data = sheet.getDataRange().getValues();
-  var headers = data[0];
-  var userIdx = headers.indexOf('USER');
-  if (userIdx === -1) return { success: false, message: 'Không tìm thấy cột USER trong sheet CAN_BO.' };
-
-  var targetUser = String(userData.user || '').trim().toLowerCase();
-  var rowIndex = -1;
-
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][userIdx]).trim().toLowerCase() === targetUser) {
-      rowIndex = i + 1;
-      break;
-    }
-  }
-
-  if (rowIndex === -1) {
-    return { success: false, message: 'Không tìm thấy cán bộ có username: ' + userData.user };
-  }
-
-  var fieldMap = {
-    'HO_TEN': userData.hoTen,
-    'MA_NV': userData.maNv,
-    'PHONG_BAN': userData.phongBan,
-    'VI_TRI': userData.viTri,
-    'SDT': userData.sdt,
-    'EMAIL': userData.email,
-    'ROLE': userData.role,
-    'IS_LEADER': userData.isLeader ? 'true' : 'false',
-    'TRANG_THAI': userData.trangThai
-  };
-
-  for (var key in fieldMap) {
-    var cIdx = headers.indexOf(key);
-    if (cIdx !== -1 && fieldMap[key] !== undefined) {
-      sheet.getRange(rowIndex, cIdx + 1).setValue(fieldMap[key]);
-    }
-  }
-
-  return { success: true, message: 'Cập nhật thông tin cán bộ thành công!' };
-}
-
-function resetUserPassword(username, newPassword) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(SHEET_NAMES.CAN_BO);
-  if (!sheet) return { success: false, message: 'Sheet CAN_BO chưa tồn tại.' };
-
-  var data = sheet.getDataRange().getValues();
-  var headers = data[0];
-  var userIdx = headers.indexOf('USER');
-  var passIdx = headers.indexOf('PASSWORD');
-  if (userIdx === -1 || passIdx === -1) return { success: false, message: 'Thiếu cột USER hoặc PASSWORD.' };
-
-  var targetUser = String(username || '').trim().toLowerCase();
-  var defaultPass = targetUser === 'admin' ? 'admin123' : '123';
-  var passToSet = newPassword || defaultPass;
-
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][userIdx]).trim().toLowerCase() === targetUser) {
-      sheet.getRange(i + 1, passIdx + 1).setValue(passToSet);
-      return { success: true, message: 'Đã đặt lại mật khẩu cho cán bộ @' + username + ' thành công (' + passToSet + ')!' };
-    }
-  }
-
-  return { success: false, message: 'Không tìm thấy cán bộ có username: ' + username };
-}
-
-function addUser(userData) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(SHEET_NAMES.CAN_BO);
-  if (!sheet) return { success: false, message: 'Sheet CAN_BO chưa tồn tại.' };
-
-  var defaultPass = userData.user === 'admin' ? 'admin123' : '123';
-  var row = [
-    sheet.getLastRow(),
-    userData.hoTen || '',
-    userData.maNv || '',
-    userData.user || '',
-    userData.password || defaultPass,
-    userData.phongBan || '',
-    userData.viTri || '',
-    userData.sdt || '',
-    userData.email || '',
-    userData.role || 'QHKH',
-    userData.isLeader ? 'true' : 'false',
-    userData.trangThai || 'Hoạt động'
-  ];
-
-  sheet.appendRow(row);
-  return { success: true, message: 'Thêm cán bộ mới thành công!', data: userData };
-}
-
 function parseDateStr(str) {
   if (!str) return null;
   var parts = String(str).split('-');
-  if (parts.length === 3) return { day: parseInt(parts[2], 10), month: parseInt(parts[1], 10), year: parseInt(parts[0], 10) };
+  if (parts.length === 3) {
+    return { day: parseInt(parts[2], 10), month: parseInt(parts[1], 10), year: parseInt(parts[0], 10) };
+  }
   parts = String(str).split('/');
-  if (parts.length >= 2) return { day: parseInt(parts[0], 10), month: parseInt(parts[1], 10) };
-  return null;
-}
-
-function parseFixedDayMonth(str) {
-  if (!str) return null;
-  var parts = String(str).split('/');
-  if (parts.length >= 2) return { day: parseInt(parts[0], 10), month: parseInt(parts[1], 10) };
+  if (parts.length >= 2) {
+    return { day: parseInt(parts[0], 10), month: parseInt(parts[1], 10), year: parts[2] ? parseInt(parts[2], 10) : null };
+  }
   return null;
 }
 
@@ -1253,5 +1915,13 @@ function getDaysUntilNextAnniversary(day, month, today) {
 
 function pad2(n) {
   return n < 10 ? '0' + n : '' + n;
+}
+
+function cloneObject(obj) {
+  try {
+    return JSON.parse(JSON.stringify(obj));
+  } catch (e) {
+    return obj;
+  }
 }
 `;

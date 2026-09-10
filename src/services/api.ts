@@ -93,8 +93,48 @@ export class ApiClient {
     return this.apiRequest<void>('resetUserPassword', { username, newPassword });
   }
 
+  public static async changePassword(username: string, oldPassword: string, newPassword: string): Promise<ApiResponse<AppUser>> {
+    return this.apiRequest<AppUser>('changePassword', { username, oldPassword, newPassword });
+  }
+
   public static async addUser(user: AppUser): Promise<ApiResponse<AppUser>> {
     return this.apiRequest<AppUser>('addUser', { user });
+  }
+
+  public static async deleteUser(username: string): Promise<ApiResponse<void>> {
+    return this.apiRequest<void>('deleteUser', { username });
+  }
+
+  public static async deleteCustomer(idKh: string): Promise<ApiResponse<void>> {
+    return this.apiRequest<void>('deleteCustomer', { idKh });
+  }
+
+  public static async updateMeeting(meeting: MeetingHistory): Promise<ApiResponse<MeetingHistory>> {
+    return this.apiRequest<MeetingHistory>('updateMeeting', { meeting });
+  }
+
+  public static async deleteMeeting(idLichSu: string): Promise<ApiResponse<void>> {
+    return this.apiRequest<void>('deleteMeeting', { idLichSu });
+  }
+
+  public static async createTask(task: Partial<Task>): Promise<ApiResponse<Task>> {
+    return this.apiRequest<Task>('createTask', { task });
+  }
+
+  public static async updateTask(task: Partial<Task>): Promise<ApiResponse<Task>> {
+    return this.apiRequest<Task>('updateTask', { task });
+  }
+
+  public static async deleteTask(idCongViec: string): Promise<ApiResponse<void>> {
+    return this.apiRequest<void>('deleteTask', { idCongViec });
+  }
+
+  public static async formatDatabaseSheets(): Promise<ApiResponse<void>> {
+    return this.apiRequest<void>('formatDatabaseSheets');
+  }
+
+  public static async syncAllToSheets(payload: any): Promise<ApiResponse<any>> {
+    return this.apiRequest<any>('syncAllToSheets', { payload });
   }
 
   /**
@@ -313,14 +353,21 @@ export class ApiClient {
         const targetUser = users.find(u => u.user.toLowerCase() === username);
         if (targetUser) {
           const expectedPwd = targetUser.password || (targetUser.user === 'admin' ? ADMIN_PASSWORD : DEFAULT_PASSWORD);
-          if (params.oldPassword !== expectedPwd) {
-            return { success: false, message: 'Mật khẩu hiện tại không đúng.' };
+          if (String(params.oldPassword) !== String(expectedPwd)) {
+            return { success: false, message: 'Mật khẩu hiện tại không chính xác. Vui lòng kiểm tra lại!' };
           }
-          targetUser.password = params.newPassword;
+          targetUser.password = String(params.newPassword);
           this.setLocalStore('USERS', users);
-          return { success: true, message: 'Đổi mật khẩu thành công!' };
+
+          // Cập nhật thông tin session của user hiện tại nếu khớp
+          const current = this.getCurrentUser();
+          if (current && current.user.toLowerCase() === username) {
+            this.setCurrentUser({ ...current, password: String(params.newPassword) });
+          }
+
+          return { success: true, message: 'Đổi mật khẩu thành công! Mật khẩu mới đã được lưu an toàn.', data: targetUser as any };
         }
-        return { success: false, message: 'Không tìm thấy cán bộ.', error: 'NOT_FOUND' };
+        return { success: false, message: 'Không tìm thấy tài khoản cán bộ.', error: 'NOT_FOUND' };
       }
 
       case 'addUser': {
@@ -338,6 +385,17 @@ export class ApiClient {
         users.push(created);
         this.setLocalStore('USERS', users);
         return { success: true, message: `Đã thêm cán bộ ${created.hoTen} thành công.`, data: created as any };
+      }
+
+      case 'deleteUser': {
+        const targetUsername = String(params.username || '').toLowerCase();
+        const idx = users.findIndex(u => u.user.toLowerCase() === targetUsername);
+        if (idx !== -1) {
+          users.splice(idx, 1);
+          this.setLocalStore('USERS', users);
+          return { success: true, message: `Đã xóa tài khoản cán bộ: ${targetUsername}` };
+        }
+        return { success: false, message: 'Không tìm thấy cán bộ cần xóa.', error: 'NOT_FOUND' };
       }
 
       case 'healthCheck': {
@@ -475,6 +533,17 @@ export class ApiClient {
         return { success: false, message: 'Không tìm thấy khách hàng.', error: 'NOT_FOUND' };
       }
 
+      case 'deleteCustomer': {
+        const targetId = String(params.idKh).trim();
+        const idx = customers.findIndex(c => c.idKh === targetId);
+        if (idx !== -1) {
+          customers.splice(idx, 1);
+          this.setLocalStore('CUSTOMERS', customers);
+          return { success: true, message: 'Đã xóa khách hàng thành công.' };
+        }
+        return { success: false, message: 'Không tìm thấy khách hàng để xóa.', error: 'NOT_FOUND' };
+      }
+
       case 'toggleCareMode': {
         const cust = customers.find(c => c.idKh === params.idKh);
         if (cust) {
@@ -534,6 +603,32 @@ export class ApiClient {
         };
       }
 
+      case 'updateMeeting': {
+        const mObj = params.meeting as MeetingHistory;
+        const idx = meetings.findIndex(m => m.idLichSu === mObj.idLichSu);
+        if (idx !== -1) {
+          meetings[idx] = {
+            ...meetings[idx],
+            ...mObj,
+            thoiGianCapNhat: new Date().toISOString().replace('T', ' ').substring(0, 19)
+          };
+          this.setLocalStore('MEETINGS', meetings);
+          return { success: true, message: 'Đã cập nhật cuộc gặp thành công.', data: meetings[idx] as any };
+        }
+        return { success: false, message: 'Không tìm thấy cuộc gặp.', error: 'NOT_FOUND' };
+      }
+
+      case 'deleteMeeting': {
+        const targetId = String(params.idLichSu).trim();
+        const idx = meetings.findIndex(m => m.idLichSu === targetId);
+        if (idx !== -1) {
+          meetings.splice(idx, 1);
+          this.setLocalStore('MEETINGS', meetings);
+          return { success: true, message: 'Đã xóa cuộc gặp khỏi hệ thống.' };
+        }
+        return { success: false, message: 'Không tìm thấy cuộc gặp để xóa.', error: 'NOT_FOUND' };
+      }
+
       case 'createTask': {
         const taskObj: Task = {
           ...params.task,
@@ -560,6 +655,28 @@ export class ApiClient {
           return { success: true, message: 'Đã cập nhật trạng thái công việc.', data: t as any };
         }
         return { success: false, message: 'Không tìm thấy công việc.', error: 'NOT_FOUND' };
+      }
+
+      case 'updateTask': {
+        const tObj = params.task as Task;
+        const idx = tasks.findIndex(t => t.idCongViec === tObj.idCongViec);
+        if (idx !== -1) {
+          tasks[idx] = { ...tasks[idx], ...tObj };
+          this.setLocalStore('TASKS', tasks);
+          return { success: true, message: 'Cập nhật công việc thành công.', data: tasks[idx] as any };
+        }
+        return { success: false, message: 'Không tìm thấy công việc.', error: 'NOT_FOUND' };
+      }
+
+      case 'deleteTask': {
+        const targetId = String(params.idCongViec).trim();
+        const idx = tasks.findIndex(t => t.idCongViec === targetId);
+        if (idx !== -1) {
+          tasks.splice(idx, 1);
+          this.setLocalStore('TASKS', tasks);
+          return { success: true, message: 'Đã xóa công việc thành công.' };
+        }
+        return { success: false, message: 'Không tìm thấy công việc để xóa.', error: 'NOT_FOUND' };
       }
 
       case 'saveCareEvent': {
@@ -686,7 +803,36 @@ export class ApiClient {
       case 'setupDatabase': {
         return {
           success: true,
-          message: 'Đã kiểm tra và tạo đủ 7 Sheet chuẩn trên Google Sheets: KHACH_HANG, LICH_SU_GAP, CONG_VIEC, SU_KIEN_CHAM_SOC, EMAIL_CONFIG, EMAIL_LOG, NGUOI_DUNG.'
+          message: 'Đã kiểm tra và tạo đủ 7 Sheet chuẩn trên Google Sheets: KHACH_HANG, LICH_SU_GAP, CONG_VIEC, SU_KIEN_CHAM_SOC, CAN_BO, EMAIL_CONFIG, EMAIL_LOG.'
+        };
+      }
+
+      case 'formatDatabaseSheets': {
+        return {
+          success: true,
+          message: 'Đã định dạng thành công toàn bộ 7 Sheet theo chuẩn nhận diện VietinBank: dòng tiêu đề xanh #004D99, viền kẻ mảnh, độ rộng cột tối ưu, đóng băng dòng đầu và bật bộ lọc tự động.'
+        };
+      }
+
+      case 'syncAllToSheets': {
+        const payload = params.payload || params;
+        if (payload.customers) this.setLocalStore('CUSTOMERS', payload.customers);
+        if (payload.meetings) this.setLocalStore('MEETINGS', payload.meetings);
+        if (payload.tasks) this.setLocalStore('TASKS', payload.tasks);
+        if (payload.careEvents) this.setLocalStore('CARE_EVENTS', payload.careEvents);
+        if (payload.users) this.setLocalStore('USERS', payload.users);
+        if (payload.emailConfig) this.setLocalStore('EMAIL_CONFIG', payload.emailConfig);
+
+        return {
+          success: true,
+          message: 'Đồng bộ toàn bộ dữ liệu lên Google Sheets thành công và đã áp dụng chuẩn định dạng VietinBank!',
+          data: {
+            customers: payload.customers?.length || 0,
+            meetings: payload.meetings?.length || 0,
+            tasks: payload.tasks?.length || 0,
+            careEvents: payload.careEvents?.length || 0,
+            users: payload.users?.length || 0
+          } as any
         };
       }
 

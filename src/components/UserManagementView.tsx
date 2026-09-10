@@ -16,7 +16,8 @@ import {
   Lock, 
   Unlock, 
   RefreshCw,
-  UserCheck
+  UserCheck,
+  Trash2
 } from 'lucide-react';
 import { AppUser, UserRole } from '../types';
 import { DEFAULT_PASSWORD, ADMIN_PASSWORD } from '../services/staffData';
@@ -26,7 +27,9 @@ interface UserManagementViewProps {
   onUpdateUser: (user: AppUser) => Promise<void>;
   onResetPassword: (username: string, newPassword?: string) => Promise<void>;
   onAddUser: (user: AppUser) => Promise<void>;
+  onDeleteUser?: (username: string) => Promise<void>;
   currentUser: AppUser | null;
+  onOpenChangePassword?: () => void;
 }
 
 export const UserManagementView: React.FC<UserManagementViewProps> = ({
@@ -34,7 +37,9 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
   onUpdateUser,
   onResetPassword,
   onAddUser,
-  currentUser
+  onDeleteUser,
+  currentUser,
+  onOpenChangePassword
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('ALL');
@@ -175,13 +180,27 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={() => setIsAddModalOpen(true)}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow-md shadow-blue-700/20 active:scale-98 transition-all cursor-pointer shrink-0 self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>+ Thêm cán bộ</span>
-        </button>
+        <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto flex-wrap">
+          {onOpenChangePassword && (
+            <button
+              id="btn-open-change-pwd-user-mgmt"
+              onClick={onOpenChangePassword}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 text-xs font-bold active:scale-98 transition-all cursor-pointer"
+              title="Đổi mật khẩu tài khoản đang đăng nhập"
+            >
+              <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+              <span>Đổi mật khẩu của tôi</span>
+            </button>
+          )}
+
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold shadow-md shadow-blue-700/20 active:scale-98 transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>+ Thêm cán bộ</span>
+          </button>
+        </div>
       </div>
 
       {/* Search and Filters */}
@@ -352,6 +371,29 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                         >
                           <KeyRound className="w-3.5 h-3.5" />
                         </button>
+
+                        {onDeleteUser && (
+                          <button
+                            onClick={async () => {
+                              if (u.user === currentUser?.user) {
+                                alert('Bạn không thể tự xóa tài khoản của chính mình!');
+                                return;
+                              }
+                              if (window.confirm(`Xác nhận xóa tài khoản cán bộ "${u.hoTen}" (${u.user}) khỏi hệ thống và Google Sheet?`)) {
+                                await onDeleteUser(u.user);
+                              }
+                            }}
+                            disabled={u.user === currentUser?.user}
+                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                              u.user === currentUser?.user 
+                                ? 'text-slate-300 cursor-not-allowed' 
+                                : 'text-slate-500 hover:text-rose-700 hover:bg-rose-50'
+                            }`}
+                            title={u.user === currentUser?.user ? 'Không thể tự xóa' : 'Xóa tài khoản cán bộ'}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

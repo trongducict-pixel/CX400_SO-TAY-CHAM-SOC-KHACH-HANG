@@ -21,7 +21,8 @@ import {
   User,
   ArrowRight,
   ArrowLeft,
-  Check
+  Check,
+  Trash2
 } from 'lucide-react';
 import { Customer, MeetingHistory, Task, CareMode, TaskStatus, AppUser } from '../types';
 
@@ -40,6 +41,7 @@ interface CustomerDetailModalProps {
   currentUser?: AppUser | null;
   users?: AppUser[];
   onReassignCreator?: (customerId: string, newCreator: { userKhoiTao: string; nguoiKhoiTao: string; phongBanKhoiTao: string }) => Promise<void>;
+  onDeleteCustomer?: (customerId: string) => Promise<void>;
 }
 
 export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
@@ -56,7 +58,8 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
   onOpenMap,
   currentUser,
   users = [],
-  onReassignCreator
+  onReassignCreator,
+  onDeleteCustomer
 }) => {
   const isAdmin = currentUser?.role === 'ADMIN';
   const [activeTab, setActiveTab] = useState<'info' | 'demand' | 'care' | 'timeline' | 'tasks'>('info');
@@ -247,6 +250,23 @@ export const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
               <MapPin className="w-3.5 h-3.5" />
               <span>Định vị vị trí</span>
             </button>
+
+            {onDeleteCustomer && (isAdmin || currentUser?.user === customer.userKhoiTao) && (
+              <button
+                id="customer-detail-btn-delete"
+                onClick={async () => {
+                  const confirmMsg = `Bạn có chắc chắn muốn xóa khách hàng "${customer.hoTen}" (${customer.sdt}) khỏi hệ thống và đồng bộ xóa trên Google Sheet? Hành động này không thể hoàn tác.`;
+                  if (window.confirm(confirmMsg)) {
+                    await onDeleteCustomer(customer.idKh);
+                  }
+                }}
+                className="px-3 py-1.5 rounded-xl bg-rose-600/80 hover:bg-rose-600 text-white font-semibold text-xs flex items-center gap-1.5 transition-all cursor-pointer sm:ml-auto"
+                title="Xóa khách hàng này"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Xóa khách hàng</span>
+              </button>
+            )}
           </div>
         </div>
 
